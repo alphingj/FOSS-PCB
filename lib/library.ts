@@ -25,14 +25,14 @@ const C0805 = (value: string, mpn: string, volts: string, lcsc?: string): Librar
 });
 
 export const LIBRARY: LibraryPart[] = [
-  R('10R', 'RC0805FR-0710RL'),
-  R('100R', 'RC0805FR-07100RL'),
+  R('10R', 'RC0805FR-0710RL', 'C96347'),
+  R('100R', 'RC0805FR-07100RL', 'C105577'),
   R('1k', 'RC0805FR-071KL', 'C95781'),
-  R('4.7k', 'RC0805FR-074K7L'),
+  R('4.7k', 'RC0805FR-074K7L', 'C60816'),
   R('10k', 'RC0805FR-0710KL', 'C84376'),
   R('38.3k', 'RC0805FR-0738K3L'),
   C0805('100nF', 'CL21B104KBCNNNC', '50V', 'C1711'),
-  C0805('1uF', 'CL21B105KAFNNNE', '25V'),
+  C0805('1uF', 'CL21B105KAFNNNE', '25V', 'C116352'),
   C0805('10uF', 'CL21A106KAFNNNE', '25V'),
   { mpn: 'EEE-FK1V470P', type: 'Capacitor_Polarized', value: '47uF_35V', footprint: 'CP_Elec_6.3x7.7', prefix: 'C', pins: ['1', '2'], params: { volts: '35V' }, role: 'Input bulk electrolytic', lcsc: 'C178565' },
   { mpn: 'UUD1E101MCL1GS', type: 'Capacitor_Polarized', value: '100uF_25V', footprint: 'CP_Elec_6.3x7.7', prefix: 'C', pins: ['1', '2'], params: { volts: '25V' }, role: 'Output bulk electrolytic', lcsc: 'C445264' },
