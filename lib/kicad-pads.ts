@@ -25,6 +25,8 @@ const SOIC8_PADS: PadGeom[] = [
 export const PINOUTS: Record<string, Record<string, number>> = {
   UC3843: { VCC: 7, OUT: 6, FB: 2, GND: 5 },
   NE555: { GND: 1, TRIG: 2, OUT: 3, RESET: 4, CTRL: 5, CONT: 5, THR: 6, THRES: 6, DISCH: 7, VCC: 8 },
+  AO3400: { G: 1, S: 2, D: 3 },
+  TL431: { R: 2, REF: 2, A: 3, K: 1 },
 };
 
 export function pinoutFor(mpn: string): Record<string, number> | null {

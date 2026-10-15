@@ -31,4 +31,26 @@ for l in pads:
     by_num[m.group(1)] = int(m.group(2))
 # net ids: VIN=1 GND=2 FB=3 GATE_DRV=4
 assert by_num == {"1": 0, "2": 3, "3": 0, "4": 0, "5": 2, "6": 4, "7": 1, "8": 0}, by_num
+
+sot = {
+    "components": [
+        {"designator": "Q9", "value": "AO3400", "mpn": "AO3400A",
+         "footprint": "SOT-23", "pins": {"G": "G9", "D": "D9", "S": "GND"},
+         "pcb_placement_mm": {"x": 10, "y": 10, "rotation": 0}},
+    ],
+    "nets": [
+        {"net_name": "GND", "nodes": ["Q9.S"]},
+        {"net_name": "G9", "nodes": ["Q9.G"]},
+        {"net_name": "D9", "nodes": ["Q9.D"]},
+    ],
+    "pcb_traces": [],
+}
+s2 = foss_to_kicad_pcb(sot)
+got = {}
+for l in s2.splitlines():
+    m = re.search(r'\(pad "(\d)".*\(net (\d+)\)', l)
+    if m:
+        got[m.group(1)] = int(m.group(2))
+# net ids: GND=1 G9=2 D9=3 → G:1→2, S:2→1, D:3→3
+assert got == {"1": 2, "2": 1, "3": 3}, got
 print("PYTHON PAD CHECKS PASSED")

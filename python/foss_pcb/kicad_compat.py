@@ -33,6 +33,8 @@ PINOUTS = {
     "UC3843": {"VCC": 7, "OUT": 6, "FB": 2, "GND": 5},
     "NE555": {"GND": 1, "TRIG": 2, "OUT": 3, "RESET": 4, "CTRL": 5, "CONT": 5,
               "THR": 6, "THRES": 6, "DISCH": 7, "VCC": 8},
+    "AO3400": {"G": 1, "S": 2, "D": 3},
+    "TL431": {"R": 2, "REF": 2, "A": 3, "K": 1},
 }
 
 
@@ -83,13 +85,22 @@ def _pad_lines(fp, mpn, des, net_nodes, net_ids, x, y, rot, pins):
                 )
             return out
         if "SOT-23" in fp:
+            table = _pinout_for(mpn) or {}
             out = []
             for n, dx, dy in SOT23_PADS:
+                label = next((l for l, num in table.items() if num == n and l in pins), None)
+                nid = 0
+                if label:
+                    for net_name in net_nodes:
+                        if f"{des}.{label}" in net_nodes[net_name]:
+                            nid = net_ids.get(net_name, 0)
+                            break
                 ax, ay = _rot(dx, dy, rot)
                 out.append(
                     f'    (pad "{n}" smd rect (at {x + ax:.3f} {y + ay:.3f} {rot})'
-                    f' (size 0.8 1.0) (layers "F.Cu" "F.Paste" "F.Mask") (net 0)'
-                    f' (tstamp {uuid4()})) ; PLACEHOLDER: SOT-23 pinout not yet verified'
+                    f' (size 0.8 1.0) (layers "F.Cu" "F.Paste" "F.Mask") (net {nid})'
+                    f' (tstamp {uuid4()}))'
+                    + ("" if label else " ; PLACEHOLDER: SOT-23 pinout not yet verified")
                 )
             return out
         return []

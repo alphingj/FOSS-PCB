@@ -64,12 +64,17 @@ export function fossToKicadPcb(pcb: FossPcb): string {
           );
         });
       } else if (c.footprint.includes('SOT-23')) {
+        // Nets resolve through verified pinouts (AO3400, TL431/DBZ); unknown
+        // MPNs stay net-0 with a marker.
+        const pinout = pinoutFor(c.mpn);
         for (const pad of SOT23_PADS) {
+          const label = pinout ? Object.keys(pinout).find((l) => pinout[l] === pad.n && l in c.pins) : undefined;
+          const nid = label ? pinNetId(pcb, netId, c.designator, label) : 0;
           const [ax, ay] = rot2(pad.dx, pad.dy, p.rotation);
           L.push(
             `    (pad "${pad.n}" smd rect (at ${(p.x + ax).toFixed(3)} ${(p.y + ay).toFixed(3)} ${p.rotation})` +
-            ` (size 0.8 1.0) (layers "F.Cu" "F.Paste" "F.Mask") (net 0) (tstamp ${uuid()}))` +
-            ` ; PLACEHOLDER: SOT-23 pinout not yet verified — nets assigned in KiCad`
+            ` (size 0.8 1.0) (layers "F.Cu" "F.Paste" "F.Mask") (net ${nid}) (tstamp ${uuid()}))` +
+            (label ? '' : ' ; PLACEHOLDER: SOT-23 pinout not yet verified — nets assigned in KiCad')
           );
         }
       }

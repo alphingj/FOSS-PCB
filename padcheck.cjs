@@ -53,4 +53,35 @@ for (const l of s.split('\n')) {
 }
 assert(r1pads['R1:1'] === 3 && r1pads['R1:2'] === 7, 'R1 1->VOUT=3, 2->FB=7', JSON.stringify(r1pads));
 assert(r1pads['D1:1'] === 3 && r1pads['D1:2'] === 2, 'D1 A->VOUT=3, K->SW=2');
+
+// synthetic SOT-23 board: AO3400A (G:1 S:2 D:3) + TL431ACDBZR (K:1 R:2 A:3)
+const sot = {
+  project_metadata: SAMPLE_BUCKBOOST.project_metadata,
+  components: [
+    { designator: 'Q9', type: 'MOSFET_N_Channel', value: 'AO3400', mpn: 'AO3400A', footprint: 'SOT-23', pins: { G: 'G9', D: 'D9', S: 'GND' }, schematic_pos: { x: 0, y: 0, rotation: 0 }, pcb_placement_mm: { x: 10, y: 10, rotation: 0, layer: 'Top' } },
+    { designator: 'U9', type: 'IC_Shunt_Regulator', value: '2.5V', mpn: 'TL431ACDBZR', footprint: 'SOT-23', pins: { R: 'FB9', A: 'GND', K: 'K9' }, schematic_pos: { x: 0, y: 0, rotation: 0 }, pcb_placement_mm: { x: 20, y: 10, rotation: 0, layer: 'Top' } },
+  ],
+  nets: [
+    { net_name: 'GND', nodes: ['Q9.S', 'U9.A'], trace_width_mm: 2, clearance_mm: 0.3, routing_type: '' },
+    { net_name: 'G9', nodes: ['Q9.G'], trace_width_mm: 0.25, clearance_mm: 0.2, routing_type: '' },
+    { net_name: 'D9', nodes: ['Q9.D'], trace_width_mm: 0.25, clearance_mm: 0.2, routing_type: '' },
+    { net_name: 'FB9', nodes: ['U9.R'], trace_width_mm: 0.25, clearance_mm: 0.2, routing_type: '' },
+    { net_name: 'K9', nodes: ['U9.K'], trace_width_mm: 0.25, clearance_mm: 0.2, routing_type: '' },
+  ],
+  schematic_wires: [],
+  pcb_traces: [],
+  pcb_layout_zones: [],
+};
+const ss = fossToKicadPcb(sot);
+const sotPads = {};
+let curS = '';
+for (const l of ss.split('\n')) {
+  const fp = l.match(/\(property "Reference" "([^"]+)"\)/);
+  if (fp) curS = fp[1];
+  const pm = l.match(/\(pad "(\d)" .* \(net (\d+)\)/);
+  if (pm && curS) (sotPads[curS] = sotPads[curS] || {})[pm[1]] = +pm[2];
+}
+// net ids: GND=1 G9=2 D9=3 FB9=4 K9=5
+assert(sotPads.Q9['1'] === 2 && sotPads.Q9['2'] === 1 && sotPads.Q9['3'] === 3, 'AO3400 nets', JSON.stringify(sotPads.Q9));
+assert(sotPads.U9['1'] === 5 && sotPads.U9['2'] === 4 && sotPads.U9['3'] === 1, 'TL431 nets', JSON.stringify(sotPads.U9));
 console.log('ALL PAD CHECKS PASSED');
