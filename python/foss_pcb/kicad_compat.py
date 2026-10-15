@@ -19,6 +19,16 @@ def kicad_pcb_to_foss(text: str) -> dict:
 # THRES=6 DISCH=7 VCC=8).
 SOIC8_DX = 2.7
 SOIC8_DY = [1.905, 0.635, -0.635, -1.905]
+# Symmetric 2-pin footprints: pad centers at ±dx (pad "1" left, "2" right).
+# Nets attach per pin label so connectivity is exact regardless of convention.
+TWO_PIN = [
+    ("R_0805", 1.05, 1.0, 1.2),
+    ("C_0805", 1.05, 1.0, 1.2),
+    ("LED_0805", 1.05, 1.0, 1.2),
+    ("SOD-123", 1.6, 1.0, 1.1),
+    ("D_SMA", 2.1, 2.0, 2.0),
+]
+SOT23_PADS = [(1, -0.9, 0.95), (2, -0.9, -0.95), (3, 0.9, 0.0)]
 PINOUTS = {
     "UC3843": {"VCC": 7, "OUT": 6, "FB": 2, "GND": 5},
     "NE555": {"GND": 1, "TRIG": 2, "OUT": 3, "RESET": 4, "CTRL": 5, "CONT": 5,
@@ -34,9 +44,54 @@ def _pinout_for(mpn: str):
     return None
 
 
-def _pad_lines(fp, mpn, des, net_nodes, net_ids, x, y, rot):
-    """Real SOIC-8 pads with verified nets; anything else gets no pads (never guessed)."""
+def _two_pin_geom(fp):
+    for key, dx, w, h in TWO_PIN:
+        if key in fp:
+            return dx, w, h
+    return None
+
+
+def _rot(dx, dy, rot):
+    import math as _m
+    r = _m.radians(rot or 0)
+    return dx * _m.cos(r) - dy * _m.sin(r), dx * _m.sin(r) + dy * _m.cos(r)
+
+
+def _pad_lines(fp, mpn, des, net_nodes, net_ids, x, y, rot, pins):
+    """SOIC-8 with verified nets; symmetric 2-pin with exact per-label nets;
+    SOT-23 geometry net-0; anything else gets no pads (never guessed)."""
     if "SOIC-8" not in fp:
+        geom = _two_pin_geom(fp)
+        if geom and pins:
+            dx, w, h = geom
+            labels = list(pins.keys())
+            first = "1" if "1" in labels else ("A" if "A" in labels else labels[0])
+            order = [first] + [l for l in labels if l != first]
+            out = []
+            for i, label in enumerate(order[:2]):
+                nid = 0
+                for net_name in net_nodes:
+                    if f"{des}.{label}" in net_nodes[net_name]:
+                        nid = net_ids.get(net_name, 0)
+                        break
+                ox = -dx if i == 0 else dx
+                ax, ay = _rot(ox, 0, rot)
+                out.append(
+                    f'    (pad "{i + 1}" smd roundrect (at {x + ax:.3f} {y + ay:.3f} {rot})'
+                    f' (size {w} {h}) (layers "F.Cu" "F.Paste" "F.Mask") (net {nid})'
+                    f' (roundrect_rratio 0.25) (tstamp {uuid4()}))'
+                )
+            return out
+        if "SOT-23" in fp:
+            out = []
+            for n, dx, dy in SOT23_PADS:
+                ax, ay = _rot(dx, dy, rot)
+                out.append(
+                    f'    (pad "{n}" smd rect (at {x + ax:.3f} {y + ay:.3f} {rot})'
+                    f' (size 0.8 1.0) (layers "F.Cu" "F.Paste" "F.Mask") (net 0)'
+                    f' (tstamp {uuid4()})) ; PLACEHOLDER: SOT-23 pinout not yet verified'
+                )
+            return out
         return []
     table = _pinout_for(mpn) or {}
     label_of = {num: label for label, num in table.items()}
@@ -91,6 +146,7 @@ def foss_to_kicad_pcb(foss: dict) -> str:
         lines.extend(_pad_lines(
             fp, c.get("mpn", ""), c.get("designator", ""), net_nodes, net_ids,
             float(p.get("x", 0)), float(p.get("y", 0)), float(p.get("rotation", 0)),
+            c.get("pins", {}) or {},
         ))
         lines.append("  )")
     for t in foss.get("pcb_traces", []):

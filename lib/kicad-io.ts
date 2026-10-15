@@ -1,6 +1,6 @@
 // KiCad s-expr interop (TS side). Python (kicad_compat.py) mirrors the export shape.
 import type { FossPcb } from './foss-schema';
-import { soic8Pads, pinoutFor, rot2 } from './kicad-pads';
+import { soic8Pads, pinoutFor, rot2, twoPinGeom, SOT23_PADS } from './kicad-pads';
 
 function uuid(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
@@ -45,6 +45,33 @@ export function fossToKicadPcb(pcb: FossPcb): string {
           ` (size 0.6 1.6) (layers "F.Cu" "F.Paste" "F.Mask") (net ${nid}) (roundrect_rratio 0.25) (tstamp ${uuid()}))` +
           (label ? '' : ' ; PLACEHOLDER: unverified pin — net assigned in KiCad')
         );
+      }
+    } else {
+      const g2 = twoPinGeom(c.footprint);
+      if (g2) {
+        // Symmetric 2-pin: nets attach per pin label, exact by construction.
+        // Pad "1" prefers label '1', then anode 'A' (diode convention), else first.
+        const labels = Object.keys(c.pins);
+        const l1 = labels.includes('1') ? '1' : labels.includes('A') ? 'A' : labels[0];
+        const l2 = labels.find((l) => l !== l1);
+        const ends: [string, number][] = [[l1, -g2.dx], ...(l2 ? [[l2, g2.dx] as [string, number]] : [])];
+        ends.forEach(([lname, ox], i) => {
+          const nid = pinNetId(pcb, netId, c.designator, lname);
+          const [ax, ay] = rot2(ox, 0, p.rotation);
+          L.push(
+            `    (pad "${i + 1}" smd roundrect (at ${(p.x + ax).toFixed(3)} ${(p.y + ay).toFixed(3)} ${p.rotation})` +
+            ` (size ${g2.w} ${g2.h}) (layers "F.Cu" "F.Paste" "F.Mask") (net ${nid}) (roundrect_rratio 0.25) (tstamp ${uuid()}))`
+          );
+        });
+      } else if (c.footprint.includes('SOT-23')) {
+        for (const pad of SOT23_PADS) {
+          const [ax, ay] = rot2(pad.dx, pad.dy, p.rotation);
+          L.push(
+            `    (pad "${pad.n}" smd rect (at ${(p.x + ax).toFixed(3)} ${(p.y + ay).toFixed(3)} ${p.rotation})` +
+            ` (size 0.8 1.0) (layers "F.Cu" "F.Paste" "F.Mask") (net 0) (tstamp ${uuid()}))` +
+            ` ; PLACEHOLDER: SOT-23 pinout not yet verified — nets assigned in KiCad`
+          );
+        }
       }
     }
     L.push(`  )`);

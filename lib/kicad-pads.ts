@@ -45,3 +45,29 @@ export function rot2(dx: number, dy: number, rotDeg: number): [number, number] {
   const c = Math.cos(r), s = Math.sin(r);
   return [+(dx * c - dy * s).toFixed(3), +(dx * s + dy * c).toFixed(3)];
 }
+
+export interface TwoPinGeom {
+  dx: number; // pad centers at ±dx
+  w: number;
+  h: number;
+}
+
+/** Symmetric 2-pin footprints: pad "1" left, pad "2" right. Nets attach per pin
+ *  label ('1'->pad1, '2'->pad2, else first/second label e.g. A/K), so net
+ *  connectivity is exact regardless of left/right convention. */
+export function twoPinGeom(fp: string): TwoPinGeom | null {
+  if (fp.includes('R_0805') || fp.includes('C_0805') || fp.includes('LED_0805')) return { dx: 1.05, w: 1.0, h: 1.2 };
+  if (fp.includes('SOD-123')) return { dx: 1.6, w: 1.0, h: 1.1 };
+  if (fp.includes('D_SMA')) return { dx: 2.1, w: 2.0, h: 2.0 };
+  // NOTE: CP_Elec and SRR1280 deliberately absent — their land patterns vary
+  // by manufacturer and are not yet sourced from a datasheet.
+  return null;
+}
+
+/** SOT-23 land pattern (pads numbered positionally). Net assignment needs a
+ *  verified pinout (not yet encoded) → emitted net-0 with PLACEHOLDER. */
+export const SOT23_PADS = [
+  { n: 1, dx: -0.9, dy: 0.95 },
+  { n: 2, dx: -0.9, dy: -0.95 },
+  { n: 3, dx: 0.9, dy: 0 },
+];
