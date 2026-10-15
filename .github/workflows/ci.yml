@@ -16,12 +16,12 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npx tsc --noEmit
       - run: npm run build
-      - run: npx tsc lib/sim/values.ts lib/sim/mna.ts lib/sim/switching.ts lib/foss-schema.ts lib/sample-buckboost.ts lib/routing.ts lib/drc.ts lib/kicad-io.ts lib/kicad-pads.ts lib/repair.ts lib/drc.ts lib/erc.ts lib/grounding.ts lib/library.ts lib/spice.ts --outDir check-out --module commonjs --target es2020 --esModuleInterop --skipLibCheck
-      - run: node scripts/prepare-checks.cjs simcheck.cjs check-out simcheck-run.cjs
-      - run: node scripts/prepare-checks.cjs routecheck.cjs check-out routecheck-run.cjs
-      - run: node scripts/prepare-checks.cjs padcheck.cjs check-out padcheck-run.cjs
-      - run: node scripts/prepare-checks.cjs spicecheck.cjs check-out spicecheck-run.cjs
-      - run: node scripts/prepare-checks.cjs repaircheck.cjs check-out repaircheck-run.cjs
+      - run: npx tsc lib/sim/values.ts lib/sim/mna.ts lib/sim/switching.ts lib/foss-schema.ts lib/sample-buckboost.ts lib/routing.ts lib/drc.ts lib/kicad-io.ts lib/kicad-pads.ts lib/repair.ts lib/drc.ts lib/erc.ts lib/grounding.ts lib/library.ts lib/spice.ts --outDir ./check-out --module commonjs --target es2020 --esModuleInterop --skipLibCheck
+      - run: node scripts/prepare-checks.cjs simcheck.cjs ./check-out simcheck-run.cjs
+      - run: node scripts/prepare-checks.cjs routecheck.cjs ./check-out routecheck-run.cjs
+      - run: node scripts/prepare-checks.cjs padcheck.cjs ./check-out padcheck-run.cjs
+      - run: node scripts/prepare-checks.cjs spicecheck.cjs ./check-out spicecheck-run.cjs
+      - run: node scripts/prepare-checks.cjs repaircheck.cjs ./check-out repaircheck-run.cjs
       - run: node simcheck-run.cjs
       - run: node routecheck-run.cjs
       - run: node padcheck-run.cjs
