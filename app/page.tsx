@@ -16,6 +16,7 @@ import PluginPanel from '../components/PluginPanel';
 import LibraryPanel from '../components/LibraryPanel';
 import GroundingPanel from '../components/GroundingPanel';
 import FabPanel from '../components/FabPanel';
+import DiagnosticsPanel from '../components/DiagnosticsPanel';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { card } from '../lib/theme';
 
@@ -136,6 +137,11 @@ export default function Page() {
             <div style={{ marginTop: 12 }}>
               <ErrorBoundary name="KiCad export">
                 <ExportBar />
+              </ErrorBoundary>
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <ErrorBoundary name="Diagnostics">
+                <DiagnosticsPanel />
               </ErrorBoundary>
             </div>
           </section>

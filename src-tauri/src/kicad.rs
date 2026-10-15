@@ -46,3 +46,30 @@ pub const SEXPR_STUB_MARKER: &str = "foss-json follows";
 pub fn foss_json_to_sexpr_stub(json: &str) -> String {
     format!("(kicad_pcb (version 20240101) (generator foss-pcb)\n  ;; {SEXPR_STUB_MARKER}\n  ;; {}\n)", json.chars().take(200).collect::<String>())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SAMPLE: &str = "(kicad_pcb (version 20240101) (generator test)\n  (title \"Demo\")\n  (net 0 \"\")\n  (net 1 \"GND\")\n  (footprint \"R_0805\" (at 5 5) (property \"Reference\" \"R1\"))\n)";
+
+    #[test]
+    fn parses_nets_with_ids_and_names() {
+        let r = parse_pcb_sexpr(SAMPLE);
+        assert!(r.nets.iter().any(|n| n == "1:GND"), "nets: {:?}", r.nets);
+    }
+
+    #[test]
+    fn parses_footprints_and_title() {
+        let r = parse_pcb_sexpr(SAMPLE);
+        assert_eq!(r.design_name, "Demo");
+        assert_eq!(r.components.len(), 1);
+    }
+
+    #[test]
+    fn stub_is_marked() {
+        let s = foss_json_to_sexpr_stub("{}");
+        assert!(s.contains(SEXPR_STUB_MARKER));
+        assert!(s.starts_with("(kicad_pcb"));
+    }
+}
