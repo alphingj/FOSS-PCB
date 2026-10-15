@@ -54,13 +54,13 @@ export const LIBRARY: LibraryPart[] = [
   { mpn: 'ATMEGA328P-PU', type: 'IC_MCU', value: 'ATmega328P', footprint: 'DIP-28_W7.62mm', prefix: 'U', pins: ['PD0', 'PD1', 'VCC', 'GND', 'RST', 'SDA', 'SCL', 'MOSI', 'MISO', 'SCK'], params: { flash: '32KB' }, role: '8-bit MCU', lcsc: 'C33901' },
   { mpn: 'ESP32-WROOM-32-N4', type: 'Module_WiFi_BT', value: 'ESP32-WROOM-32-N4', footprint: 'Module_ESP32-WROOM-32', prefix: 'U', pins: ['3V3', 'GND', 'TX', 'RX', 'EN'], params: { flash: '4MB' }, role: 'WiFi/BT module (bare -32 number is ambiguous across 4/8/16MB variants — N4 pinned)', lcsc: 'C82899' },
   { mpn: 'LTST-C170KRKT', type: 'LED', value: 'RED_0805', footprint: 'LED_0805_2012Metric', prefix: 'LED', pins: ['A', 'K'], params: { vf: '2V' }, role: 'Indicator red', lcsc: 'C94868' },
-  { mpn: 'LTST-C170KGKT', type: 'LED', value: 'GREEN_0805', footprint: 'LED_0805_2012Metric', prefix: 'LED', pins: ['A', 'K'], params: { vf: '2.1V' }, role: 'Indicator green' },
+  { mpn: 'LTST-C170KGKT', type: 'LED', value: 'GREEN_0805', footprint: 'LED_0805_2012Metric', prefix: 'LED', pins: ['A', 'K'], params: { vf: '2.1V' }, role: 'Indicator green-yellow', lcsc: 'C98221' },
   { mpn: 'MKDS_1_5_2', type: 'Connector_Terminal_2Pin', value: 'TERM_2P', footprint: 'TerminalBlock_Phoenix_MKDS-1,5-2_5.08mm', prefix: 'J', pins: ['1', '2'], params: { pitch: '5.08mm', current: '10A' }, role: 'Screw terminal in/out (Phoenix MKDS 1,5/2-5,08)', lcsc: 'C5183929' },
   { mpn: 'PH-2X04', type: 'Connector_PinHeader', value: '2x04_P2.54', footprint: 'PinHeader_2x04_P2.54mm_Vertical', prefix: 'J', pins: ['1', '2', '3', '4', '5', '6', '7', '8'], params: { pitch: '2.54mm' }, role: 'Programming/debug header' },
   { mpn: 'PJ-102A', type: 'Connector_BarrelJack', value: 'DC_2.1mm', footprint: 'BarrelJack_PJ-102A_Horizontal', prefix: 'J', pins: ['TIP', 'SLEEVE'], params: {}, role: 'DC barrel input', lcsc: 'C20518877' },
   { mpn: 'ABM3-16.000MHZ-D2Y-T', type: 'Crystal', value: '16MHz', footprint: 'Crystal_HC49-SD', prefix: 'Y', pins: ['1', '2'], params: { freq: '16MHz' }, role: 'MCU crystal' },
-  { mpn: 'B3F-1000', type: 'Switch_Tactile', value: '6x6mm', footprint: 'SW_Tactile_SPST_6x6mm', prefix: 'SW', pins: ['1', '2'], params: {}, role: 'Reset/user button' },
-  { mpn: '045101.5MRL', type: 'Fuse', value: '1.5A_125V', footprint: 'Fuse_1206_3216Metric', prefix: 'F', pins: ['1', '2'], params: { current: '1.5A' }, role: 'Input fuse' },
+  { mpn: 'B3F-1000', type: 'Switch_Tactile', value: '6x6mm_THT', footprint: 'SW_Tactile_SPST_6x6mm_THT', prefix: 'SW', pins: ['1', '2'], params: {}, role: 'Reset/user button (through-hole)', lcsc: 'C93157' },
+  { mpn: '045101.5MRL', type: 'Fuse', value: '1.5A_125V', footprint: 'Fuse_2410_6125Metric', prefix: 'F', pins: ['1', '2'], params: { current: '1.5A' }, role: 'Input fuse (Nano2 2410 — not 1206)', lcsc: 'C185113' },
 ];
 
 export const KNOWN_FOOTPRINTS = new Set(LIBRARY.map((p) => p.footprint));
