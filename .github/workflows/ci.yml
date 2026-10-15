@@ -24,11 +24,11 @@ jobs:
       - run: node scripts/prepare-checks.cjs padcheck.cjs check-out padcheck-run.cjs
       - run: node scripts/prepare-checks.cjs spicecheck.cjs check-out spicecheck-run.cjs
       - run: node scripts/prepare-checks.cjs repaircheck.cjs check-out repaircheck-run.cjs
-      - run: node simcheck-run.cjs
-      - run: node routecheck-run.cjs
-      - run: node padcheck-run.cjs
-      - run: node spicecheck-run.cjs
-      - run: node repaircheck-run.cjs
+      - run: node -r ./scripts/node-path.cjs simcheck-run.cjs
+      - run: node -r ./scripts/node-path.cjs routecheck-run.cjs
+      - run: node -r ./scripts/node-path.cjs padcheck-run.cjs
+      - run: node -r ./scripts/node-path.cjs spicecheck-run.cjs
+      - run: node -r ./scripts/node-path.cjs repaircheck-run.cjs
 
   rust:
     runs-on: windows-latest

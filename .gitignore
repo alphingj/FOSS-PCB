@@ -8,8 +8,6 @@ out/
 # Rust / Tauri
 src-tauri/target/
 src-tauri/gen/
-src-tauri/icons/*.ico
-src-tauri/icons/*.icns
 # Python
 __pycache__/
 *.pyc
