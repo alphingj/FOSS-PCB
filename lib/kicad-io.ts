@@ -1,14 +1,25 @@
 // KiCad s-expr interop (TS side). Python (kicad_compat.py) mirrors the export shape.
 import type { FossPcb } from './foss-schema';
+import { soic8Pads, pinoutFor, rot2 } from './kicad-pads';
 
 function uuid(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
   return `foss-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
 }
 
+/** Net id for a component pin label, or 0 when unconnected. */
+function pinNetId(pcb: FossPcb, netId: Map<string, number>, des: string, label: string): number {
+  const key = `${des}.${label}`;
+  for (const n of pcb.nets) {
+    if (n.nodes.includes(key)) return netId.get(n.net_name) ?? 0;
+  }
+  return 0;
+}
+
 /** FOSS JSON -> loadable .kicad_pcb: numeric net ids (0 reserved), segments as
- *  start/end pairs, footprints with layer/tstamp/properties. Pads are intentionally
- *  absent (unknown pin geometry) — KiCad loads pad-less footprints fine. */
+ *  start/end pairs, footprints with layer/tstamp/properties. SOIC-8 footprints
+ *  get real pads with verified pinouts; every other footprint is pad-less
+ *  (never guessed) — KiCad loads those fine for placement, add pads there. */
 export function fossToKicadPcb(pcb: FossPcb): string {
   const L: string[] = ['(kicad_pcb (version 20240101) (generator foss-pcb) (general) (paper "A4")'];
   pcb.nets.forEach((n, i) => L.push(`  (net ${i + 1} "${n.net_name.replace(/"/g, '')}")`));
@@ -19,6 +30,23 @@ export function fossToKicadPcb(pcb: FossPcb): string {
     L.push(`    (property "Reference" "${c.designator}")`);
     L.push(`    (property "Value" "${c.value.replace(/"/g, '')}")`);
     if (c.mpn) L.push(`    (property "MPN" "${c.mpn.replace(/"/g, '')}")`);
+    if (c.footprint.includes('SOIC-8')) {
+      // Real pads. Nets resolve through the verified pinout table; pads whose
+      // label has no verified number stay on net 0 (never guessed).
+      const pinout = pinoutFor(c.mpn);
+      const numOf = new Map<string, number>();
+      if (pinout) for (const [label, num] of Object.entries(pinout)) numOf.set(label, num);
+      for (const pad of soic8Pads()) {
+        const label = Array.from(numOf.entries()).find(([, n]) => n === pad.n)?.[0];
+        const nid = label ? pinNetId(pcb, netId, c.designator, label) : 0;
+        const [ax, ay] = rot2(pad.dx, pad.dy, p.rotation);
+        L.push(
+          `    (pad "${pad.n}" smd roundrect (at ${(p.x + ax).toFixed(3)} ${(p.y + ay).toFixed(3)} ${p.rotation})` +
+          ` (size 0.6 1.6) (layers "F.Cu" "F.Paste" "F.Mask") (net ${nid}) (roundrect_rratio 0.25) (tstamp ${uuid()}))` +
+          (label ? '' : ' ; PLACEHOLDER: unverified pin — net assigned in KiCad')
+        );
+      }
+    }
     L.push(`  )`);
   }
   for (const t of pcb.pcb_traces ?? []) {
