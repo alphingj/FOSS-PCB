@@ -1,6 +1,6 @@
-const { parseResistance, parseCapacitance, parseInductance, parseCurrent } = require('SIMDIR/values.js');
-const { solveDC, checkFeedback } = require('SIMDIR/mna.js');
-const { simulateBuckBoost } = require('SIMDIR/switching.js');
+const { parseResistance, parseCapacitance, parseInductance, parseCurrent } = require('SIMDIR/sim/values.js');
+const { solveDC, checkFeedback } = require('SIMDIR/sim/mna.js');
+const { simulateBuckBoost } = require('SIMDIR/sim/switching.js');
 const { SAMPLE_BUCKBOOST } = require('SIMDIR/sample-buckboost.js');
 
 const assert = (c, m, v) => { if (!c) { console.error('FAIL: ' + m, v ?? ''); process.exit(1); } else console.log('ok: ' + m); };

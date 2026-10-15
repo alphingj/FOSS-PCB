@@ -4,6 +4,7 @@ out/
 *.log
 .DS_Store
 *.tsbuildinfo
+*-run.cjs
 # Rust / Tauri
 src-tauri/target/
 src-tauri/gen/
