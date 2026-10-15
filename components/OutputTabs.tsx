@@ -1,5 +1,6 @@
 'use client';
 import { useStore } from '../lib/store';
+import { findByMpn } from '../lib/library';
 import { card, table, muted, mono, sectionLabel } from '../lib/theme';
 
 export default function OutputTabs() {
@@ -17,8 +18,8 @@ export default function OutputTabs() {
           <div style={sectionLabel}>Bill of materials ({pcb?.components.length ?? 0})</div>
           <div style={{ maxHeight: 200, overflow: 'auto', marginBottom: 12 }}>
             <table style={table}>
-              <thead><tr>{['Ref', 'Type', 'Value', 'Footprint', 'MPN'].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
-              <tbody>{pcb?.components.map((c) => <tr key={c.designator}>{[c.designator, c.type, c.value, c.footprint, c.mpn].map((v, i) => <td key={i} style={td}>{v}</td>)}</tr>)}</tbody>
+              <thead><tr>{['Ref', 'Type', 'Value', 'Footprint', 'MPN', 'LCSC'].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
+              <tbody>{pcb?.components.map((c) => <tr key={c.designator}>{[c.designator, c.type, c.value, c.footprint, c.mpn, findByMpn(c.mpn)?.lcsc ?? '—'].map((v, i) => <td key={i} style={td}>{v}</td>)}</tr>)}</tbody>
             </table>
           </div>
           <div style={sectionLabel}>Nets ({pcb?.nets.length ?? 0})</div>

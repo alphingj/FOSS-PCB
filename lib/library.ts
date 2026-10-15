@@ -10,26 +10,28 @@ export interface LibraryPart {
   pins: string[]; // pin labels, matching net-node conventions
   params: Record<string, string>; // key specs for matching (ohms, V, A, ...)
   role: string;
+  /** Verified LCSC stock code (C-number). Absent = not verified, never guessed. */
+  lcsc?: string;
 }
 
-const R = (value: string, mpn: string): LibraryPart => ({
+const R = (value: string, mpn: string, lcsc?: string): LibraryPart => ({
   mpn, type: 'Resistor', value, footprint: 'R_0805_2012Metric', prefix: 'R',
-  pins: ['1', '2'], params: { power: '0.125W', tol: '1%' }, role: 'General resistor',
+  pins: ['1', '2'], params: { power: '0.125W', tol: '1%' }, role: 'General resistor', lcsc,
 });
 
-const C0805 = (value: string, mpn: string, volts: string): LibraryPart => ({
+const C0805 = (value: string, mpn: string, volts: string, lcsc?: string): LibraryPart => ({
   mpn, type: 'Capacitor_Ceramic', value, footprint: 'C_0805_2012Metric', prefix: 'C',
-  pins: ['1', '2'], params: { volts, diel: 'X7R' }, role: 'Decoupling/filter ceramic',
+  pins: ['1', '2'], params: { volts, diel: 'X7R' }, role: 'Decoupling/filter ceramic', lcsc,
 });
 
 export const LIBRARY: LibraryPart[] = [
   R('10R', 'RC0805FR-0710RL'),
   R('100R', 'RC0805FR-07100RL'),
-  R('1k', 'RC0805FR-071KL'),
+  R('1k', 'RC0805FR-071KL', 'C95781'),
   R('4.7k', 'RC0805FR-074K7L'),
-  R('10k', 'RC0805FR-0710KL'),
+  R('10k', 'RC0805FR-0710KL', 'C84376'),
   R('38.3k', 'RC0805FR-0738K3L'),
-  C0805('100nF', 'CL21B104KBCNNNC', '50V'),
+  C0805('100nF', 'CL21B104KBCNNNC', '50V', 'C1711'),
   C0805('1uF', 'CL21B105KAFNNNE', '25V'),
   C0805('10uF', 'CL21A106KAFNNNE', '25V'),
   { mpn: 'EEE-FK1V470P', type: 'Capacitor_Polarized', value: '47uF_35V', footprint: 'CP_Elec_6.3x7.7', prefix: 'C', pins: ['1', '2'], params: { volts: '35V' }, role: 'Input bulk electrolytic' },
@@ -37,7 +39,7 @@ export const LIBRARY: LibraryPart[] = [
   { mpn: 'SRR1280-100M', type: 'Inductor_Shielded', value: '10uH_3.5A', footprint: 'Inductor_Bourns_SRR1280_12.5x12.5mm', prefix: 'L', pins: ['1', '2'], params: { isat: '3.5A' }, role: 'Power inductor 10uH' },
   { mpn: 'SRR1280-220M', type: 'Inductor_Shielded', value: '22uH_3.5A', footprint: 'Inductor_Bourns_SRR1280_12.5x12.5mm', prefix: 'L', pins: ['1', '2'], params: { isat: '3.5A' }, role: 'Power inductor 22uH' },
   { mpn: 'SRR1280-470M', type: 'Inductor_Shielded', value: '47uH_3.5A', footprint: 'Inductor_Bourns_SRR1280_12.5x12.5mm', prefix: 'L', pins: ['1', '2'], params: { isat: '3.5A' }, role: 'Power inductor 47uH' },
-  { mpn: 'MBRA340T3G', type: 'Diode_Schottky', value: '40V_3A', footprint: 'D_SMA', prefix: 'D', pins: ['A', 'K'], params: { vr: '40V', io: '3A' }, role: 'Freewheeling Schottky' },
+  { mpn: 'MBRA340T3G', type: 'Diode_Schottky', value: '40V_3A', footprint: 'D_SMA', prefix: 'D', pins: ['A', 'K'], params: { vr: '40V', io: '3A' }, role: 'Freewheeling Schottky', lcsc: 'C26178' },
   { mpn: 'SS34-E3', type: 'Diode_Schottky', value: '40V_3A_SMB', footprint: 'D_SMB', prefix: 'D', pins: ['A', 'K'], params: { vr: '40V', io: '3A' }, role: 'Schottky SMB' },
   { mpn: '1N4148W-7-F', type: 'Diode_Signal', value: '100V_150mA', footprint: 'D_SOD-123', prefix: 'D', pins: ['A', 'K'], params: { vr: '100V' }, role: 'Signal diode' },
   { mpn: 'IRF7416TRPBF', type: 'MOSFET_P_Channel', value: 'IRF7416', footprint: 'SOIC-8_3.9x4.9mm_P1.27mm', prefix: 'Q', pins: ['S', 'G', 'D'], params: { vdss: '-30V', id: '-9A' }, role: 'High-side P-MOS switch' },

@@ -68,11 +68,11 @@ export default function LibraryPanel() {
       </div>
       <div style={{ maxHeight: 260, overflow: 'auto' }}>
         <table style={table}>
-          <thead><tr>{['MPN', 'Value', 'Footprint', ''].map((h) => <th key={h} style={lth}>{h}</th>)}</tr></thead>
+          <thead><tr>{['MPN', 'Value', 'Footprint', 'LCSC', ''].map((h) => <th key={h} style={lth}>{h}</th>)}</tr></thead>
           <tbody>
             {results.map((p) => (
               <tr key={p.mpn} title={p.role}>
-                <td style={ltd}>{p.mpn}</td><td style={ltd}>{p.value}</td><td style={ltd}>{p.footprint}</td>
+                <td style={ltd}>{p.mpn}</td><td style={ltd}>{p.value}</td><td style={ltd}>{p.footprint}</td><td style={ltd}>{p.lcsc ?? '—'}</td>
                 <td style={ltd}><button type="button" disabled={!pcb} onClick={() => add(p.mpn)} style={btnPrimary}>Add</button></td>
               </tr>
             ))}

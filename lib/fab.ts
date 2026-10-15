@@ -4,6 +4,7 @@
 // export remains the production path. Everything emitted is format-valid.
 import type { FossPcb } from './foss-schema';
 import { bodySizeForFootprint } from './models-3d';
+import { findByMpn } from './library';
 
 const f46 = (mm: number) => Math.round(mm * 1e6).toString();
 
@@ -121,7 +122,7 @@ function drillFile(pcb: FossPcb): { text: string; hits: number } {
 const csvCell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
 
 export function bomCsv(pcb: FossPcb): string {
-  return ['Comment,Designator,Footprint,LCSC Part # (JLC)', ...pcb.components.map((c) => [`${c.value} ${c.mpn}`.trim(), c.designator, c.footprint, ''].map(csvCell).join(','))].join('\n');
+  return ['Comment,Designator,Footprint,LCSC Part # (JLC)', ...pcb.components.map((c) => [`${c.value} ${c.mpn}`.trim(), c.designator, c.footprint, findByMpn(c.mpn)?.lcsc ?? ''].map(csvCell).join(','))].join('\n');
 }
 
 /** JLC CPL: rotation passed through as placed; JLC may need footprint-specific
