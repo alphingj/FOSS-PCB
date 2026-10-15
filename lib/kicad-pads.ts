@@ -27,6 +27,7 @@ export const PINOUTS: Record<string, Record<string, number>> = {
   NE555: { GND: 1, TRIG: 2, OUT: 3, RESET: 4, CTRL: 5, CONT: 5, THR: 6, THRES: 6, DISCH: 7, VCC: 8 },
   AO3400: { G: 1, S: 2, D: 3 },
   TL431: { R: 2, REF: 2, A: 3, K: 1 },
+  LM358: { OUT1: 1, 'IN1-': 2, 'IN1+': 3, 'V-': 4, 'IN2+': 5, 'IN2-': 6, OUT2: 7, 'V+': 8 },
 };
 
 export function pinoutFor(mpn: string): Record<string, number> | null {

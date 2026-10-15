@@ -60,13 +60,17 @@ const sot = {
   components: [
     { designator: 'Q9', type: 'MOSFET_N_Channel', value: 'AO3400', mpn: 'AO3400A', footprint: 'SOT-23', pins: { G: 'G9', D: 'D9', S: 'GND' }, schematic_pos: { x: 0, y: 0, rotation: 0 }, pcb_placement_mm: { x: 10, y: 10, rotation: 0, layer: 'Top' } },
     { designator: 'U9', type: 'IC_Shunt_Regulator', value: '2.5V', mpn: 'TL431ACDBZR', footprint: 'SOT-23', pins: { R: 'FB9', A: 'GND', K: 'K9' }, schematic_pos: { x: 0, y: 0, rotation: 0 }, pcb_placement_mm: { x: 20, y: 10, rotation: 0, layer: 'Top' } },
+    { designator: 'U8', type: 'IC_OpAmp_Dual', value: 'LM358', mpn: 'LM358DR', footprint: 'SOIC-8_3.9x4.9mm_P1.27mm', pins: { OUT1: 'O1', 'IN1-': 'N1', 'IN1+': 'P1', 'V-': 'GND', 'IN2+': 'P2', 'IN2-': 'N2', OUT2: 'O2', 'V+': 'VCC8' }, schematic_pos: { x: 0, y: 0, rotation: 0 }, pcb_placement_mm: { x: 30, y: 10, rotation: 0, layer: 'Top' } },
   ],
   nets: [
-    { net_name: 'GND', nodes: ['Q9.S', 'U9.A'], trace_width_mm: 2, clearance_mm: 0.3, routing_type: '' },
+    { net_name: 'GND', nodes: ['Q9.S', 'U9.A', 'U8.V-'], trace_width_mm: 2, clearance_mm: 0.3, routing_type: '' },
     { net_name: 'G9', nodes: ['Q9.G'], trace_width_mm: 0.25, clearance_mm: 0.2, routing_type: '' },
     { net_name: 'D9', nodes: ['Q9.D'], trace_width_mm: 0.25, clearance_mm: 0.2, routing_type: '' },
     { net_name: 'FB9', nodes: ['U9.R'], trace_width_mm: 0.25, clearance_mm: 0.2, routing_type: '' },
     { net_name: 'K9', nodes: ['U9.K'], trace_width_mm: 0.25, clearance_mm: 0.2, routing_type: '' },
+    { net_name: 'O1', nodes: ['U8.OUT1'], trace_width_mm: 0.25, clearance_mm: 0.2, routing_type: '' },
+    { net_name: 'O2', nodes: ['U8.OUT2'], trace_width_mm: 0.25, clearance_mm: 0.2, routing_type: '' },
+    { net_name: 'VCC8', nodes: ['U8.V+'], trace_width_mm: 0.25, clearance_mm: 0.2, routing_type: '' },
   ],
   schematic_wires: [],
   pcb_traces: [],
@@ -81,7 +85,9 @@ for (const l of ss.split('\n')) {
   const pm = l.match(/\(pad "(\d)" .* \(net (\d+)\)/);
   if (pm && curS) (sotPads[curS] = sotPads[curS] || {})[pm[1]] = +pm[2];
 }
-// net ids: GND=1 G9=2 D9=3 FB9=4 K9=5
+// net ids: GND=1 G9=2 D9=3 FB9=4 K9=5 O1=6 O2=7 VCC8=8
 assert(sotPads.Q9['1'] === 2 && sotPads.Q9['2'] === 1 && sotPads.Q9['3'] === 3, 'AO3400 nets', JSON.stringify(sotPads.Q9));
 assert(sotPads.U9['1'] === 5 && sotPads.U9['2'] === 4 && sotPads.U9['3'] === 1, 'TL431 nets', JSON.stringify(sotPads.U9));
+assert(sotPads.U8['1'] === 6 && sotPads.U8['4'] === 1 && sotPads.U8['7'] === 7 && sotPads.U8['8'] === 8, 'LM358 nets', JSON.stringify(sotPads.U8));
+assert(sotPads.U8['2'] === 0 && sotPads.U8['3'] === 0, 'LM358 unconnected inputs stay net 0');
 console.log('ALL PAD CHECKS PASSED');
