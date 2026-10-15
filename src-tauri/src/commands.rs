@@ -23,6 +23,31 @@ fn python_bin() -> &'static str {
     }
 }
 
+#[derive(serde::Serialize)]
+pub struct PythonStatus {
+    pub ok: bool,
+    pub bin: String,
+    pub version: String,
+}
+
+/// Probe for a working interpreter so the UI can guide instead of silently stubbing.
+#[tauri::command]
+pub fn check_python() -> PythonStatus {
+    for bin in ["python", "py"] {
+        if let Ok(out) = Command::new(bin).arg("--version").output() {
+            if out.status.success() {
+                let v = String::from_utf8_lossy(if out.stdout.is_empty() { &out.stderr } else { &out.stdout })
+                    .trim()
+                    .chars()
+                    .take(64)
+                    .collect::<String>();
+                return PythonStatus { ok: true, bin: bin.to_string(), version: v };
+            }
+        }
+    }
+    PythonStatus { ok: false, bin: String::new(), version: String::new() }
+}
+
 /// Directory holding the bundled `python/` + `plugins/` trees:
 /// Tauri resources dir in a bundle, repo root in `tauri dev`.
 fn bundle_root(app: &AppHandle) -> PathBuf {

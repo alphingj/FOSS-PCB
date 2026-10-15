@@ -1,6 +1,7 @@
 'use client';
 import { StoreProvider } from '../lib/store';
 import ProviderBar from '../components/ProviderBar';
+import PythonBanner from '../components/PythonBanner';
 import ThemeToggle from '../components/ThemeToggle';
 import ProjectBar from '../components/ProjectBar';
 import PromptBox from '../components/PromptBox';
@@ -57,6 +58,7 @@ export default function Page() {
         </div>
         <ProjectBar />
       </header>
+      <PythonBanner />
 
       <div style={{ display: 'flex', gap: 20, maxWidth: 1280, margin: '0 auto', padding: '20px 18px 60px', alignItems: 'flex-start' }}>
         <nav className="foss-sidebar" style={{ position: 'sticky', top: 132, width: 150, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>

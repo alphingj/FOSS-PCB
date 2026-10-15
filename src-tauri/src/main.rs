@@ -10,6 +10,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![
+            commands::check_python,
             commands::parse_kicad_pcb,
             commands::write_kicad_pcb,
             commands::run_drc,

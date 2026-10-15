@@ -10,6 +10,7 @@ export async function invokeCmd<T>(cmd: string, args: any): Promise<T | null> {
 }
 
 export const Desktop = {
+  pythonStatus: () => invokeCmd<{ ok: boolean; bin: string; version: string }>('check_python', {}),
   parseKicad: (text: string) => invokeCmd('parse_kicad_pcb', { text }),
   writeKicad: (fossJson: string) => invokeCmd<string>('write_kicad_pcb', { fossJson }),
   drc: (boardW: number, boardH: number, placements: [string, number, number][]) =>
