@@ -4,6 +4,7 @@ import { useStore } from '../lib/store';
 import { SYSTEM_PROMPT } from '../lib/providers';
 import { chatDirect } from '../lib/chat-direct';
 import { parseFossPcb } from '../lib/foss-schema';
+import { validationErrors, repairPrompt } from '../lib/repair';
 import { SAMPLE_BUCKBOOST, SAMPLE_MARKDOWN } from '../lib/sample-buckboost';
 import { input, btnPrimary, btnPlain, muted } from '../lib/theme';
 
@@ -11,21 +12,11 @@ export default function PromptBox() {
   const { provider, setRawText, setPcb, setError } = useStore();
   const [prompt, setPrompt] = useState('build a simple buck boost, 5-15V in, -12V 1A out, 50x35mm 2-layer');
   const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState('');
 
-  const send = async () => {
-    setBusy(true); setError('');
-    if (!provider.apiKey.trim()) { setError('Paste an API key in the provider bar first (or load the demo).'); setBusy(false); return; }
-    if (!provider.model.trim()) { setError('Enter a model id first (or Fetch models to pick one).'); setBusy(false); return; }
-    const apply = (text: string) => {
-      setRawText(text);
-      try {
-        setPcb(parseFossPcb(text));
-      } catch (e: any) {
-        setError('AI returned invalid JSON: ' + e.message + ' — fix manually or retry.');
-      }
-    };
+  const ask = async (userText: string): Promise<string> => {
+    // 1) Next dev-server proxy (keeps keys off CORS preflights)
     try {
-      // 1) Next dev-server proxy (keeps keys off CORS preflights)
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -33,19 +24,52 @@ export default function PromptBox() {
           ...provider,
           messages: [
             { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'user', content: prompt },
+            { role: 'user', content: userText },
           ],
         }),
       });
       const j = await res.json();
-      if (!j.error && j.text) { apply(j.text); return; }
-      throw new Error(j.error ?? 'proxy unavailable — trying direct');
+      if (!j.error && j.text) return j.text as string;
     } catch {
-      try {
-        // 2) Direct browser→provider (static export / Tauri path)
-        apply(await chatDirect(provider, prompt));
-      } catch (e: any) { setError(e.message); }
-    } finally { setBusy(false); }
+      /* fall through to direct */
+    }
+    // 2) Direct browser→provider (static export / Tauri path)
+    return chatDirect(provider, userText);
+  };
+
+  const send = async () => {
+    setBusy(true); setError(''); setStatus('');
+    if (!provider.apiKey.trim()) { setError('Paste an API key in the provider bar first (or load the demo).'); setBusy(false); return; }
+    if (!provider.model.trim()) { setError('Enter a model id first (or Fetch models to pick one).'); setBusy(false); return; }
+    try {
+      let text = await ask(prompt);
+      // validator-repair loop: parse + machine checks, at most 3 repairs
+      for (let attempt = 0; attempt <= 3; attempt++) {
+        let problems: string[] = [];
+        try {
+          const pcb = parseFossPcb(text);
+          problems = validationErrors(pcb);
+          setRawText(text);
+          setPcb(pcb);
+          if (!problems.length) {
+            setStatus(attempt === 0 ? '' : `Clean after ${attempt} repair${attempt === 1 ? '' : 's'}.`);
+            return;
+          }
+        } catch (e: any) {
+          problems = [`Unparseable output: ${e.message}`];
+        }
+        if (attempt === 3) {
+          setError(`Still failing after 3 repairs: ${problems.slice(0, 4).join(' · ')} — kept last output for manual fix.`);
+          return;
+        }
+        setStatus(`Repair ${attempt + 1}/3: ${problems[0]}${problems.length > 1 ? ` (+${problems.length - 1} more)` : ''}`);
+        text = await ask(repairPrompt(prompt, problems.slice(0, 8)));
+      }
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const loadDemo = () => { setRawText(SAMPLE_MARKDOWN); setPcb(SAMPLE_BUCKBOOST); setError(''); };
@@ -68,6 +92,7 @@ export default function PromptBox() {
         </button>
         <button type="button" onClick={loadDemo} style={btnPlain}>Try the demo</button>
       </div>
+      {status && <div style={{ ...muted, marginTop: 8 }}>{status}</div>}
     </div>
   );
 }
