@@ -50,4 +50,12 @@ assert(!iss2.some((i) => i.message.includes('clearance')), 'same-net overlap not
 // DRC: off-board trace point flagged
 const board3 = { ...board, pcb_traces: [{ id: 't9', net: 'A', layer: 'Top', pts_mm: [[10, 10], [60, 10]], width_mm: 0.25 }] };
 assert(runDrc(board3).some((i) => i.message.includes('leaves the board')), 'off-board flagged');
+
+// DRC: trace through a foreign body flagged; same-net body exempt
+const part = (pins) => ({ designator: 'R99', type: 'Resistor', value: '10k', mpn: '', footprint: 'R_0805_2012Metric', pins, schematic_pos: { x: 0, y: 0, rotation: 0 }, pcb_placement_mm: { x: 10, y: 10, rotation: 0, layer: 'Top' } });
+const thru = [{ id: 'tb', net: 'B', layer: 'Top', pts_mm: [[5, 10], [15, 10]], width_mm: 0.25 }];
+const board4 = { ...board, components: [part({ 1: 'X', 2: 'Y' })], pcb_traces: thru };
+assert(runDrc(board4).some((i) => i.message.includes('R99')), 'foreign body proximity flagged');
+const board5 = { ...board, components: [part({ 1: 'B', 2: 'B' })], pcb_traces: thru };
+assert(!runDrc(board5).some((i) => i.message.includes('R99')), 'same-net body exempt');
 console.log('ALL ROUTE/DRC CHECKS PASSED');

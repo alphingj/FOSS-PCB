@@ -1,5 +1,6 @@
 import type { FossPcb } from './foss-schema';
 import { segSegDist, type Pt } from './routing';
+import { bodySizeForFootprint } from './models-3d';
 
 export interface DrcIssue {
   severity: 'error' | 'warning';
@@ -64,7 +65,49 @@ function traceIssues(pcb: FossPcb): DrcIssue[] {
       }
     }
   }
+
+  // Trace-to-part: segments too close to a component body that carries NO pin
+  // on the trace's net (same-net copper touching is electrically fine).
+  // Body rects ignore odd-angle rotation (90° swaps w/d) — documented approx.
+  for (const t of traces) {
+    if (t.net === 'GND') continue; // plane pours intentionally touch everything
+    const need = clearanceOf.get(t.net) ?? DEFAULT_CLEARANCE_MM;
+    for (const c of pcb.components) {
+      if (Object.values(c.pins).includes(t.net)) continue;
+      const [bw, bd] = bodySizeForFootprint(c.footprint);
+      const rot = ((c.pcb_placement_mm.rotation % 180) + 180) % 180;
+      const [w, d] = Math.abs(rot - 90) < 1 ? [bd, bw] : [bw, bd];
+      const cx = c.pcb_placement_mm.x, cy = c.pcb_placement_mm.y;
+      const rect = { x1: cx - w / 2, y1: cy - d / 2, x2: cx + w / 2, y2: cy + d / 2 };
+      const pts = t.pts_mm;
+      for (let i = 0; i + 1 < pts.length && violations < MAX_TRACE_VIOLATIONS; i++) {
+        const a = { x: pts[i][0], y: pts[i][1] };
+        const b = { x: pts[i + 1][0], y: pts[i + 1][1] };
+        if (segRectDist(a, b, rect) < need) {
+          violations += 1;
+          issues.push({ severity: 'error', message: `Trace ${t.id} (${t.net}) too close to ${c.designator} (< ${need.toFixed(2)}mm)` });
+          break;
+        }
+      }
+    }
+  }
   return issues;
+}
+
+/** Minimum distance segment ab to axis-aligned rect (0 when crossing/inside). */
+export function segRectDist(a: Pt, b: Pt, r: { x1: number; y1: number; x2: number; y2: number }): number {
+  const inside = (p: Pt) => p.x >= r.x1 && p.x <= r.x2 && p.y >= r.y1 && p.y <= r.y2;
+  if (inside(a) || inside(b)) return 0;
+  const corners: Pt[] = [
+    { x: r.x1, y: r.y1 }, { x: r.x2, y: r.y1 }, { x: r.x2, y: r.y2 }, { x: r.x1, y: r.y2 },
+  ];
+  let best = Infinity;
+  for (let i = 0; i < 4; i++) {
+    const c = corners[i], d = corners[(i + 1) % 4];
+    const dist = segSegDist(a, b, c, d);
+    if (dist < best) best = dist;
+  }
+  return best;
 }
 
 /** Pure code checks — never trust the LLM for these. */
