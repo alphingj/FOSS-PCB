@@ -7,6 +7,8 @@ on:
 jobs:
   web:
     runs-on: windows-latest
+    env:
+      NODE_PATH: node_modules
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -27,8 +29,6 @@ jobs:
       - run: node padcheck-run.cjs
       - run: node spicecheck-run.cjs
       - run: node repaircheck-run.cjs
-        env:
-          NODE_PATH: node_modules
 
   rust:
     runs-on: windows-latest
@@ -40,6 +40,8 @@ jobs:
 
   python:
     runs-on: windows-latest
+    env:
+      PYTHONPATH: python
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -48,5 +50,3 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: python python/verify_plugins.py
       - run: python python/padcheck_py.py
-        env:
-          PYTHONPATH: python
