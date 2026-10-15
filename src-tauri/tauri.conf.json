@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "FOSS-PCB",
+  "version": "0.1.0",
+  "identifier": "org.fosspcb.app",
+  "build": {
+    "frontendDist": "../out",
+    "devUrl": "http://localhost:3000",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [{ "title": "FOSS-PCB", "width": 1400, "height": 900 }],
+    "security": { "csp": null }
+  },
+  "bundle": {
+    "active": true,
+    "publisher": "FOSS-PCB contributors",
+    "shortDescription": "Open text-to-PCB designer",
+    "longDescription": "FOSS-PCB turns text prompts into schematic, layout, 3D and simulated test.",
+    "licenseFile": "../LICENSE",
+    "category": "DeveloperTool",
+    "targets": ["msi", "dmg"],
+    "icon": ["icons/icon.ico"],
+    "resources": ["../python", "../plugins"],
+    "windows": {
+      "wix": { "language": ["en-US"] }
+    },
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    }
+  }
+}

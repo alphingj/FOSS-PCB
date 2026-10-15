@@ -1,0 +1,18 @@
+node_modules/
+.next/
+out/
+*.log
+.DS_Store
+*.tsbuildinfo
+# Rust / Tauri
+src-tauri/target/
+src-tauri/icons/*.ico
+src-tauri/icons/*.icns
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.python-version
+python/.venv/
+# OS
+Thumbs.db

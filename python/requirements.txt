@@ -1,0 +1,4 @@
+# Python sidecar (optional until you need full STEP/KiCad scripting)
+# pip install -r requirements.txt
+cadquery>=2.4
+numpy>=1.26
