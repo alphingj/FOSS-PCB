@@ -69,10 +69,10 @@ export default function ExportBar() {
           pins: {},
           schematic_pos: { x: 100 + (i % perRow) * 80, y: 150 + Math.floor(i / perRow) * 90, rotation: 0 },
           pcb_placement_mm: {
-            x: c.x || 10 + (i % perRow) * 10,
-            y: c.y || 10 + Math.floor(i / perRow) * 10,
+            x: c.x ?? 10 + (i % perRow) * 10,
+            y: c.y ?? 10 + Math.floor(i / perRow) * 10,
             rotation: c.rot,
-            layer: 'Top' as const,
+            layer: c.layer,
           },
         })),
         nets: nets.filter((n) => n).map((n) => ({ net_name: n, nodes: [], trace_width_mm: 0.25, clearance_mm: 0.2, routing_type: 'Imported' })),

@@ -26,7 +26,7 @@ export default function LabPanel() {
       inductanceH: Number.isFinite(Lh) ? Lh : 47e-6,
       CoutF: Number.isFinite(Cout) ? Cout : 100e-6,
     });
-    const fb = checkFeedback(pcb, -Math.abs(toNum(assumed.vout_nominal_v ?? -12, -12)));
+    const fb = checkFeedback(pcb, toNum(assumed.vout_nominal_v ?? -12, -12));
     return { sim, fb, isat: Number.isFinite(isat) ? isat : 3.5, l1src: l1 ? 'L1' : 'default 47µH', coutSrc: c2 ? 'C2' : 'default 100µF' };
   }, [pcb]);
 

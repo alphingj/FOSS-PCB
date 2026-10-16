@@ -83,7 +83,7 @@ export default function PromptBox() {
           aria-label="Board description"
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') void send(); }}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !busy) void send(); }}
           placeholder="e.g. USB-C PD trigger board, 20V 3A out…"
           style={{ ...input, flex: '1 1 280px', padding: '12px 16px', fontSize: 14, borderRadius: 14 }}
         />

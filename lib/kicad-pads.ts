@@ -67,8 +67,8 @@ export function twoPinGeom(fp: string): TwoPinGeom | null {
   return null;
 }
 
-/** SOT-23 land pattern (pads numbered positionally). Net assignment needs a
- *  verified pinout (not yet encoded) → emitted net-0 with PLACEHOLDER. */
+/** SOT-23 land pattern (pads numbered positionally). Nets resolve through the
+ *  verified pinout table (AO3400, TL431); unknown MPNs stay net-0. */
 export const SOT23_PADS = [
   { n: 1, dx: -0.9, dy: 0.95 },
   { n: 2, dx: -0.9, dy: -0.95 },

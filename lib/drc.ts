@@ -125,6 +125,12 @@ export function runDrc(pcb: FossPcb): DrcIssue[] {
   if (!nets.has('GND')) issues.push({ severity: 'error', message: 'Missing GND net' });
 
   const byDes = new Map(pcb.components.map((c) => [c.designator, c]));
+  const seen = new Set<string>();
+  for (const c of pcb.components) {
+    if (seen.has(c.designator))
+      issues.push({ severity: 'error', message: `Duplicate designator ${c.designator}` });
+    seen.add(c.designator);
+  }
   const netNames = new Set(pcb.nets.map((n) => n.net_name));
   for (const n of pcb.nets) {
     for (const node of n.nodes) {

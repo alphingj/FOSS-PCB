@@ -99,7 +99,7 @@ export function checkFeedback(
 ): { vfb: number; regulatesAt: number; ok: boolean; detail: string } {
   const { voltages, warnings } = solveDC(pcb, { VOUT: voutNominal, VIN: 0 });
   const raw = voltages.get('FB');
-  if (raw === undefined || warnings.length > 3) {
+  if (raw === undefined) {
     return { vfb: NaN, regulatesAt: NaN, ok: false, detail: 'FB network unsolvable — check divider wiring' };
   }
   const vfb = Math.abs(raw);

@@ -99,9 +99,9 @@ export function fossToKicadPcb(pcb: FossPcb): string {
  *  net ids/names. Pins/zones/traces are NOT recoverable from this direction —
  *  nets come back with empty node lists for the user/AI to re-attach. */
 export function kicadPcbToFoss(text: string): {
-  designator: string; value: string; footprint: string; x: number; y: number; rot: number;
+  designator: string; value: string; footprint: string; x: number; y: number; rot: number; layer: 'Top' | 'Bottom';
 }[] {
-  const comps: { designator: string; value: string; footprint: string; x: number; y: number; rot: number }[] = [];
+  const comps: { designator: string; value: string; footprint: string; x: number; y: number; rot: number; layer: 'Top' | 'Bottom' }[] = [];
   const fpRe = /\(footprint\s+"([^"]+)"([^]*?)(?=\(footprint\s+"|$)/g;
   let m: RegExpExecArray | null;
   while ((m = fpRe.exec(text))) {
@@ -110,6 +110,7 @@ export function kicadPcbToFoss(text: string): {
     const at = body.match(/\(at\s+(-?[\d.]+)\s+(-?[\d.]+)(?:\s+(-?[\d.]+))?/);
     const ref = body.match(/\(property\s+"Reference"\s+"([^"]*)"/);
     const val = body.match(/\(property\s+"Value"\s+"([^"]*)"/);
+    const layer = body.match(/\(layer\s+"([^"]+)"/);
     comps.push({
       designator: ref?.[1] ?? `U${comps.length + 1}`,
       value: val?.[1] ?? '',
@@ -117,6 +118,7 @@ export function kicadPcbToFoss(text: string): {
       x: at ? parseFloat(at[1]) : 0,
       y: at ? parseFloat(at[2]) : 0,
       rot: at?.[3] ? parseFloat(at[3]) : 0,
+      layer: layer && /B\.Cu|Bottom/i.test(layer[1]) ? 'Bottom' : 'Top',
     });
   }
   return comps;

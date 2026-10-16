@@ -58,4 +58,10 @@ const board4 = { ...board, components: [part({ 1: 'X', 2: 'Y' })], pcb_traces: t
 assert(runDrc(board4).some((i) => i.message.includes('R99')), 'foreign body proximity flagged');
 const board5 = { ...board, components: [part({ 1: 'B', 2: 'B' })], pcb_traces: thru };
 assert(!runDrc(board5).some((i) => i.message.includes('R99')), 'same-net body exempt');
+// DRC: duplicate designators flagged
+const dup = { ...board, components: [
+  { designator: 'R1', type: 'Resistor', value: '10k', mpn: '', footprint: 'R_0805_2012Metric', pins: {}, schematic_pos: { x: 0, y: 0, rotation: 0 }, pcb_placement_mm: { x: 5, y: 5, rotation: 0, layer: 'Top' } },
+  { designator: 'R1', type: 'Resistor', value: '10k', mpn: '', footprint: 'R_0805_2012Metric', pins: {}, schematic_pos: { x: 0, y: 0, rotation: 0 }, pcb_placement_mm: { x: 8, y: 5, rotation: 0, layer: 'Top' } },
+] };
+assert(runDrc(dup).some((i) => i.message.includes('Duplicate designator R1')), 'duplicate designator flagged');
 console.log('ALL ROUTE/DRC CHECKS PASSED');

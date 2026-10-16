@@ -47,7 +47,14 @@ function writeStore(s: Record<string, ProjectFile>) {
   try {
     localStorage.setItem(KEY, JSON.stringify(s));
   } catch {
-    /* quota/private mode — session-only */
+    // Quota exceeded: shed snapshot history (oldest first) and retry once
+    // before giving up to session-only. Never silently keep everything.
+    for (const p of Object.values(s)) p.snaps = p.snaps.slice(0, 3);
+    try {
+      localStorage.setItem(KEY, JSON.stringify(s));
+    } catch {
+      /* still failing — session-only */
+    }
   }
 }
 
