@@ -32,10 +32,11 @@ CL21B105KAFNNNE | 1uF | C_0805_2012Metric
 CL21A106KAFNNNE | 10uF | C_0805_2012Metric
 EEE-FK1V470P | 47uF_35V | CP_Elec_6.3x7.7
 UUD1E101MCL1GS | 100uF_25V | CP_Elec_6.3x7.7
-SRR1280-100M | 10uH_3.5A | Inductor_Bourns_SRR1280_12.5x12.5mm
-SRR1280-220M | 22uH_3.5A | Inductor_Bourns_SRR1280_12.5x12.5mm
+SRR1280-100M | 10uH_6A | Inductor_Bourns_SRR1280_12.5x12.5mm
+SRR1280-220M | 22uH_4.1A | Inductor_Bourns_SRR1280_12.5x12.5mm
 SRR1280-470M | 47uH_3.5A | Inductor_Bourns_SRR1280_12.5x12.5mm
 MBRA340T3G | 40V_3A | D_SMA
+SSA34-E3/5AT | 40V_3A_SMA | D_SMA
 1N4148W-7-F | 100V_150mA | D_SOD-123
 IRF7416TRPBF | IRF7416 | SOIC-8_3.9x4.9mm_P1.27mm
 IRLZ44NPBF | IRLZ44N | TO-220-3_Vertical
@@ -45,16 +46,28 @@ NE555DR | NE555 | SOIC-8_3.9x4.9mm_P1.27mm
 LM7805CT | 5V_1A | TO-220-3_Vertical
 AMS1117-3.3 | 3.3V_1A | SOT-223-3_TabPin2
 LM358DR | LM358 | SOIC-8_3.9x4.9mm_P1.27mm
+TL431ACDBZR | 2.5V | SOT-23
 ATMEGA328P-PU | ATmega328P | DIP-28_W7.62mm
-ESP32-WROOM-32 | ESP32-WROOM-32 | Module_ESP32-WROOM-32
-MKDS_1_5_2 | TERM_2P | TerminalBlock_Phoenix_MKDS-1,5-2_5.08mm`;
+ESP32-WROOM-32-N4 | ESP32-WROOM-32-N4 | Module_ESP32-WROOM-32
+MKDS_1_5_2 | TERM_2P | TerminalBlock_Phoenix_MKDS-1,5-2_5.08mm
+A2541WV-2x4P | 2x04_P2.54 | PinHeader_2x04_P2.54mm_Vertical
+PJ-102A | DC_2.1mm | BarrelJack_PJ-102A_Horizontal
+B3F-1000 | 6x6mm_THT | SW_Tactile_SPST_6x6mm_THT
+045101.5MRL | 1.5A_125V | Fuse_2410_6125Metric`;
 
 export async function fetchOpenRouterModels(apiKey: string, baseUrl: string): Promise<string[]> {
-  const res = await fetch(`${baseUrl.replace(/\/$/, '')}/models`, {
-    headers: { Authorization: `Bearer ${apiKey}` },
-  });
-  if (!res.ok) throw new Error(`models fetch failed: ${res.status}`);
-  const j = await res.json();
-  const arr = Array.isArray(j?.data) ? j.data : [];
-  return arr.map((m: any) => m.id ?? m.name).filter(Boolean).slice(0, 200);
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 15000);
+  try {
+    const res = await fetch(`${baseUrl.replace(/\/$/, '')}/models`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: ctl.signal,
+    });
+    if (!res.ok) throw new Error(`models fetch failed: ${res.status}`);
+    const j = await res.json();
+    const arr = Array.isArray(j?.data) ? j.data : [];
+    return arr.map((m: any) => m.id ?? m.name).filter(Boolean).slice(0, 200);
+  } finally {
+    clearTimeout(t);
+  }
 }

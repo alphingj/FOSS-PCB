@@ -18,8 +18,16 @@ export function toNum(v: unknown, fallback: number): number {
   return fallback;
 }
 export function parseResistance(s: string): number {
-  const m = s.replace(/,/g, '').match(/(\d+(\.\d+)?)\s*([kKmM]?)(?:ohm|Ω|R\b|R(?=_|$))/i)
-    ?? s.replace(/,/g, '').match(/(\d+(\.\d+)?)\s*([kKmM]?)\s*$/);
+  const clean = s.replace(/,/g, '');
+  // European notation: 4K7 -> 4700, 4M7 -> 4.7M, 4R7 -> 4.7
+  const eurK = clean.match(/^(\d+)\s*[kK]\s*(\d+)$/);
+  if (eurK) return parseFloat(`${eurK[1]}.${eurK[2]}`) * 1e3;
+  const eurM = clean.match(/^(\d+)\s*[mM]\s*(\d+)$/);
+  if (eurM) return parseFloat(`${eurM[1]}.${eurM[2]}`) * 1e6;
+  const eurR = clean.match(/^(\d+)\s*[Rr]\s*(\d+)$/);
+  if (eurR) return parseFloat(`${eurR[1]}.${eurR[2]}`);
+  const m = clean.match(/(\d+(\.\d+)?)\s*([kKmM]?)(?:ohm|Ω|R\b|R(?=_|$))/i)
+    ?? clean.match(/(\d+(\.\d+)?)\s*([kKmM]?)\s*$/);
   if (!m) return NaN;
   let n = parseFloat(m[1]);
   const suf = (m[3] || '').toLowerCase();

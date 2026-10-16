@@ -14,6 +14,8 @@ assert(close(parseCapacitance('100nF'), 100e-9), 'C 100nF');
 assert(close(parseInductance('47uH_3.5A'), 47e-6), 'L 47uH');
 assert(parseCurrent('47uH_3.5A') === 3.5, 'Isat 3.5A');
 assert(Number.isNaN(parseResistance('blah')), 'R garbage -> NaN');
+assert(parseResistance('4K7') === 4700, 'R 4K7 european');
+assert(parseResistance('4R7') === 4.7, 'R 4R7 european');
 
 // MNA on demo board: FB divider 38.3k/10k at VOUT=-12 -> |FB| ~ 2.484V
 const fb = checkFeedback(SAMPLE_BUCKBOOST, -12);

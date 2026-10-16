@@ -2,7 +2,6 @@ use crate::{drc, kicad, router};
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::sync::mpsc;
 use std::time::Duration;
 
 use tauri::{AppHandle, Manager};
@@ -60,37 +59,64 @@ fn bundle_root(app: &AppHandle) -> PathBuf {
 }
 
 /// Run a Python module with JSON on stdin, capturing stdout. Times out instead
-/// of hanging the UI forever.
+/// of hanging the UI forever (and kills the child so zombies can't pile up).
 fn run_python_module(app: &AppHandle, module: &str, extra_args: &[&str], stdin_json: &str) -> Result<String, String> {
+    use std::io::Read;
+    use std::time::Instant;
     let root = bundle_root(app);
     let mut child = Command::new(python_bin())
-        .args(extra_args)
+        .arg("-m")
         .arg(module)
+        .args(extra_args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .current_dir(&root)
         .env("PYTHONPATH", root.join("python"))
         .spawn()
-        .map_err(|e| format!("spawn python ({module}): {e}"))?;
+        .map_err(|e| format!("spawn python -m {module}: {e}"))?;
     if let Some(stdin) = child.stdin.as_mut() {
         let _ = stdin.write_all(stdin_json.as_bytes());
     }
-    let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || {
-        let _ = tx.send(child.wait_with_output());
-    });
-    let out = rx
-        .recv_timeout(PLUGIN_TIMEOUT)
-        .map_err(|_| format!("{module} timed out after {}s", PLUGIN_TIMEOUT.as_secs()))?
-        .map_err(|e| format!("{module} failed: {e}"))?;
-    if !out.stdout.is_empty() {
-        return Ok(String::from_utf8_lossy(&out.stdout).to_string());
+    drop(child.stdin.take());
+    let deadline = Instant::now() + PLUGIN_TIMEOUT;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                let mut so = String::new();
+                let mut se = String::new();
+                if let Some(mut o) = child.stdout.take() {
+                    let _ = o.read_to_string(&mut so);
+                }
+                if let Some(mut e) = child.stderr.take() {
+                    let _ = e.read_to_string(&mut se);
+                }
+                if !status.success() && so.is_empty() {
+                    return Err(format!(
+                        "plugin exit {}: {}",
+                        status,
+                        se.chars().take(500).collect::<String>()
+                    ));
+                }
+                if !so.is_empty() {
+                    return Ok(so);
+                }
+                return Err(format!(
+                    "plugin empty stdout: {}",
+                    se.chars().take(500).collect::<String>()
+                ));
+            }
+            Ok(None) => {
+                if Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(format!("{module} timed out after {}s", PLUGIN_TIMEOUT.as_secs()));
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            Err(e) => return Err(format!("{module} failed: {e}")),
+        }
     }
-    Err(format!(
-        "plugin empty stdout: {}",
-        String::from_utf8_lossy(&out.stderr).chars().take(500).collect::<String>()
-    ))
 }
 
 #[tauri::command]
@@ -115,8 +141,7 @@ pub fn autoroute(nets: Vec<String>) -> Vec<String> {
 #[tauri::command]
 pub fn run_python_plugin(app: AppHandle, plugin: String, args_json: String) -> String {
     // args via stdin: immune to shell quote-mangling on every platform.
-    let module = format!("foss_pcb.runner {plugin}");
-    match run_python_module(&app, &module, &[], &args_json) {
+    match run_python_module(&app, "foss_pcb.runner", &[&plugin], &args_json) {
         Ok(s) => s,
         Err(e) => format!("{{\"error\":\"{e}\"}}"),
     }

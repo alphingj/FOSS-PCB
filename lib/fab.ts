@@ -6,7 +6,11 @@ import type { FossPcb } from './foss-schema';
 import { bodySizeForFootprint } from './models-3d';
 import { findByMpn } from './library';
 
-const f46 = (mm: number) => Math.round(mm * 1e6).toString();
+/** RS-274X 4.6 fixed-width coordinate: exactly 4 integer + 6 fractional digits. */
+const f46 = (mm: number) => {
+  const v = Math.round(Math.max(0, mm) * 1e6);
+  return v.toString().padStart(10, '0');
+};
 
 const THT_DRILL: { key: string; dia: number }[] = [
   { key: 'MKDS', dia: 1.3 },
@@ -45,13 +49,14 @@ function apertures(widths: number[]): { defs: string[]; code: Map<number, number
 }
 
 function outlineRegion(W: number, H: number): string[] {
+  const z = f46(0);
   return [
     'G36*',
-    `X0Y0D02*`,
-    `X${f46(W)}Y0D01*`,
+    `X${z}Y${z}D02*`,
+    `X${f46(W)}Y${z}D01*`,
     `X${f46(W)}Y${f46(H)}D01*`,
-    `X0Y${f46(H)}D01*`,
-    `X0Y0D01*`,
+    `X${z}Y${f46(H)}D01*`,
+    `X${z}Y${z}D01*`,
     'G37*',
   ];
 }
@@ -103,7 +108,7 @@ function silkTop(pcb: FossPcb): string {
 }
 
 function drillFile(pcb: FossPcb): { text: string; hits: number } {
-  const L = ['M48', 'METRIC,TZ', 'G04 prototype center-hits per THT part — verify before ordering*'];
+  const L = ['M48', 'METRIC,TZ,000.000', 'G04 prototype center-hits per THT part — verify before ordering*'];
   const tools = new Map<number, number>();
   const hits: { dia: number; x: number; y: number }[] = [];
   for (const c of pcb.components) {
