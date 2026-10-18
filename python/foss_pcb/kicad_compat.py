@@ -54,6 +54,14 @@ def _two_pin_geom(fp):
     return None
 
 
+def _net_tok(nid, net_ids):
+    """KiCad >= 6 requires the net *name* next to the id; net 0 is the empty name."""
+    for name, i in net_ids.items():
+        if i == nid:
+            return f'(net {nid} "{str(name).replace(chr(34), "")}")'
+    return '(net 0 "")'
+
+
 def _rot(dx, dy, rot):
     import math as _m
     r = _m.radians(rot or 0)
@@ -78,16 +86,17 @@ def _pad_lines(fp, mpn, des, net_nodes, net_ids, x, y, rot, pins):
                         nid = net_ids.get(net_name, 0)
                         break
                 ox = -dx if i == 0 else dx
-                ax, ay = _rot(ox, 0, rot)
+                # raw local offset — KiCad applies the footprint rotation itself
                 out.append(
-                    f'    (pad "{i + 1}" smd roundrect (at {x + ax:.3f} {y + ay:.3f} {rot})'
-                    f' (size {w} {h}) (layers "F.Cu" "F.Paste" "F.Mask") (net {nid})'
+                    f'    (pad "{i + 1}" smd roundrect (at {ox:.3f} 0 {rot})'
+                    f' (size {w} {h}) (layers "F.Cu" "F.Paste" "F.Mask") {_net_tok(nid, net_ids)}'
                     f' (roundrect_rratio 0.25) (tstamp {uuid4()}))'
                 )
             return out
         if "SOT-23" in fp:
             table = _pinout_for(mpn) or {}
             out = []
+            placeholders = 0
             for n, dx, dy in SOT23_PADS:
                 label = next((l for l, num in table.items() if num == n and l in pins), None)
                 nid = 0
@@ -96,26 +105,30 @@ def _pad_lines(fp, mpn, des, net_nodes, net_ids, x, y, rot, pins):
                         if f"{des}.{label}" in net_nodes[net_name]:
                             nid = net_ids.get(net_name, 0)
                             break
-                ax, ay = _rot(dx, dy, rot)
+                else:
+                    placeholders += 1
+                # pad `at` is an offset from the footprint origin; KiCad applies the
+                # footprint rotation itself, so emit raw local offsets
                 out.append(
-                    f'    (pad "{n}" smd rect (at {x + ax:.3f} {y + ay:.3f} {rot})'
-                    f' (size 0.8 1.0) (layers "F.Cu" "F.Paste" "F.Mask") (net {nid})'
+                    f'    (pad "{n}" smd rect (at {dx:.3f} {dy:.3f} {rot})'
+                    f' (size 0.8 1.0) (layers "F.Cu" "F.Paste" "F.Mask") {_net_tok(nid, net_ids)}'
                     f' (tstamp {uuid4()}))'
-                    + ("" if label else " ; PLACEHOLDER: SOT-23 pinout not yet verified")
+                )
+            if placeholders:
+                out.append(
+                    f'    (property "FOSS_PLACEHOLDER" "{placeholders} unverified SOT-23 pin(s) '
+                    f'on net 0 — assign nets in KiCad")'
                 )
             return out
         return []
     table = _pinout_for(mpn) or {}
     label_of = {num: label for label, num in table.items()}
-    r = math.radians(rot or 0)
-    cos_r, sin_r = math.cos(r), math.sin(r)
     out = []
+    placeholders = 0
     for i in range(8):
         n = i + 1
         dx = -SOIC8_DX if n <= 4 else SOIC8_DX
         dy = SOIC8_DY[(n - 1) % 4]
-        ax = x + dx * cos_r - dy * sin_r
-        ay = y + dx * sin_r + dy * cos_r
         label = label_of.get(n)
         nid = 0
         if label:
@@ -123,11 +136,17 @@ def _pad_lines(fp, mpn, des, net_nodes, net_ids, x, y, rot, pins):
                 if f"{des}.{label}" in net_nodes[net_name]:
                     nid = net_ids.get(net_name, 0)
                     break
+        else:
+            placeholders += 1
         out.append(
-            f'    (pad "{n}" smd roundrect (at {ax:.3f} {ay:.3f} {rot})'
-            f' (size 0.6 1.6) (layers "F.Cu" "F.Paste" "F.Mask") (net {nid})'
+            f'    (pad "{n}" smd roundrect (at {dx:.3f} {dy:.3f} {rot})'
+            f' (size 1.95 0.6) (layers "F.Cu" "F.Paste" "F.Mask") {_net_tok(nid, net_ids)}'
             f' (roundrect_rratio 0.25) (tstamp {uuid4()}))'
-            + ("" if label else " ; PLACEHOLDER: unverified pin — net assigned in KiCad")
+        )
+    if placeholders:
+        out.append(
+            f'    (property "FOSS_PLACEHOLDER" "{placeholders} unverified pin(s) on net 0 '
+            f'— assign nets in KiCad")'
         )
     return out
 
@@ -142,7 +161,9 @@ def foss_to_kicad_pcb(foss: dict) -> str:
     net_ids = {}
     for i, n in enumerate(nets, start=1):
         name = _q(n.get("net_name", ""))
-        net_ids[n.get("net_name")] = i
+        if not name:
+            name = f"NET{i}"
+        net_ids[n.get("net_name") or name] = i
         lines.append(f'  (net {i} "{name}")')
     for c in foss.get("components", []):
         p = c.get("pcb_placement_mm", {}) or {}
@@ -161,8 +182,10 @@ def foss_to_kicad_pcb(foss: dict) -> str:
             c.get("pins", {}) or {},
         ))
         lines.append("  )")
+    net_tok = _net_tok(0, net_ids)
     for t in foss.get("pcb_traces", []):
         nid = net_ids.get(t.get("net"), 0)
+        net_tok = _net_tok(nid, net_ids)
         layer = "F.Cu" if t.get("layer", "Top") == "Top" else "B.Cu"
         pts = t.get("pts_mm", []) or []
         for (x1, y1), (x2, y2) in zip(pts, pts[1:]):
@@ -170,7 +193,18 @@ def foss_to_kicad_pcb(foss: dict) -> str:
                 continue
             lines.append(
                 f'  (segment (start {x1} {y1}) (end {x2} {y2})'
-                f' (width {t.get("width_mm", 0.25)}) (layer "{layer}") (net {nid}))'
+                f' (width {t.get("width_mm", 0.25)}) (layer "{layer}") {net_tok})'
+            )
+    # Board outline on Edge.Cuts — without it KiCad flags invalid_outline.
+    spec = ((foss.get("project_metadata") or {}).get("pcb_specifications") or {})
+    bw = float(spec.get("board_width_mm", 0) or 0)
+    bh = float(spec.get("board_height_mm", 0) or 0)
+    if bw > 0 and bh > 0:
+        corners = [(0, 0), (bw, 0), (bw, bh), (0, bh), (0, 0)]
+        for (x1, y1), (x2, y2) in zip(corners, corners[1:]):
+            lines.append(
+                f'  (gr_line (start {x1} {y1}) (end {x2} {y2})'
+                f' (stroke (width 0.1) (type solid)) (layer "Edge.Cuts") (tstamp {uuid4()}))'
             )
     lines.append(")")
     return "\n".join(lines)

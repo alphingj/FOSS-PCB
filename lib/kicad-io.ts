@@ -16,6 +16,12 @@ function pinNetId(pcb: FossPcb, netId: Map<string, number>, des: string, label: 
   return 0;
 }
 
+/** KiCad >= 6 requires the net *name* alongside the id; net 0 is the empty name. */
+function netToken(nid: number, byId: Map<number, string>): string {
+  const name = byId.get(nid);
+  return name === undefined ? '(net 0 "")' : `(net ${nid} "${name.replace(/"/g, '')}")`;
+}
+
 /** FOSS JSON -> loadable .kicad_pcb: numeric net ids (0 reserved), segments as
  *  start/end pairs, footprints with layer/tstamp/properties. SOIC-8 footprints
  *  get real pads with verified pinouts; every other footprint is pad-less
@@ -24,6 +30,7 @@ export function fossToKicadPcb(pcb: FossPcb): string {
   const L: string[] = ['(kicad_pcb (version 20240101) (generator foss-pcb) (general) (paper "A4")'];
   pcb.nets.forEach((n, i) => L.push(`  (net ${i + 1} "${n.net_name.replace(/"/g, '')}")`));
   const netId = new Map(pcb.nets.map((n, i) => [n.net_name, i + 1]));
+  const netById = new Map(pcb.nets.map((n, i) => [i + 1, n.net_name] as const));
   for (const c of pcb.components) {
     const p = c.pcb_placement_mm;
     L.push(`  (footprint "${c.footprint}" (layer "F.Cu") (tstamp ${uuid()}) (at ${p.x} ${p.y} ${p.rotation})`);
@@ -36,16 +43,20 @@ export function fossToKicadPcb(pcb: FossPcb): string {
       const pinout = pinoutFor(c.mpn);
       const numOf = new Map<string, number>();
       if (pinout) for (const [label, num] of Object.entries(pinout)) numOf.set(label, num);
+      let placeholders = 0;
       for (const pad of soic8Pads()) {
         const label = Array.from(numOf.entries()).find(([, n]) => n === pad.n)?.[0];
         const nid = label ? pinNetId(pcb, netId, c.designator, label) : 0;
-        const [ax, ay] = rot2(pad.dx, pad.dy, p.rotation);
+        if (!label) placeholders++;
+        // KiCad treats pad `at` as an offset from the footprint origin and applies
+        // the footprint rotation itself — emit raw local offsets, never pre-rotated.
         L.push(
-          `    (pad "${pad.n}" smd roundrect (at ${(p.x + ax).toFixed(3)} ${(p.y + ay).toFixed(3)} ${p.rotation})` +
-          ` (size 0.6 1.6) (layers "F.Cu" "F.Paste" "F.Mask") (net ${nid}) (roundrect_rratio 0.25) (tstamp ${uuid()}))` +
-          (label ? '' : ' ; PLACEHOLDER: unverified pin — net assigned in KiCad')
+          `    (pad "${pad.n}" smd roundrect (at ${pad.dx.toFixed(3)} ${pad.dy.toFixed(3)} ${p.rotation})` +
+          ` (size 1.95 0.6) (layers "F.Cu" "F.Paste" "F.Mask") ${netToken(nid, netById)} (roundrect_rratio 0.25) (tstamp ${uuid()}))`
         );
       }
+      if (placeholders)
+        L.push(`    (property "FOSS_PLACEHOLDER" "${placeholders} unverified pin(s) on net 0 — assign nets in KiCad")`);
     } else {
       const g2 = twoPinGeom(c.footprint);
       if (g2) {
@@ -57,26 +68,27 @@ export function fossToKicadPcb(pcb: FossPcb): string {
         const ends: [string, number][] = [[l1, -g2.dx], ...(l2 ? [[l2, g2.dx] as [string, number]] : [])];
         ends.forEach(([lname, ox], i) => {
           const nid = pinNetId(pcb, netId, c.designator, lname);
-          const [ax, ay] = rot2(ox, 0, p.rotation);
           L.push(
-            `    (pad "${i + 1}" smd roundrect (at ${(p.x + ax).toFixed(3)} ${(p.y + ay).toFixed(3)} ${p.rotation})` +
-            ` (size ${g2.w} ${g2.h}) (layers "F.Cu" "F.Paste" "F.Mask") (net ${nid}) (roundrect_rratio 0.25) (tstamp ${uuid()}))`
+            `    (pad "${i + 1}" smd roundrect (at ${ox.toFixed(3)} 0 ${p.rotation})` +
+            ` (size ${g2.w} ${g2.h}) (layers "F.Cu" "F.Paste" "F.Mask") ${netToken(nid, netById)} (roundrect_rratio 0.25) (tstamp ${uuid()}))`
           );
         });
       } else if (c.footprint.includes('SOT-23')) {
         // Nets resolve through verified pinouts (AO3400, TL431/DBZ); unknown
         // MPNs stay net-0 with a marker.
         const pinout = pinoutFor(c.mpn);
+        let placeholders = 0;
         for (const pad of SOT23_PADS) {
           const label = pinout ? Object.keys(pinout).find((l) => pinout[l] === pad.n && l in c.pins) : undefined;
           const nid = label ? pinNetId(pcb, netId, c.designator, label) : 0;
-          const [ax, ay] = rot2(pad.dx, pad.dy, p.rotation);
+          if (!label) placeholders++;
           L.push(
-            `    (pad "${pad.n}" smd rect (at ${(p.x + ax).toFixed(3)} ${(p.y + ay).toFixed(3)} ${p.rotation})` +
-            ` (size 0.8 1.0) (layers "F.Cu" "F.Paste" "F.Mask") (net ${nid}) (tstamp ${uuid()}))` +
-            (label ? '' : ' ; PLACEHOLDER: SOT-23 pinout not yet verified — nets assigned in KiCad')
+            `    (pad "${pad.n}" smd rect (at ${pad.dx.toFixed(3)} ${pad.dy.toFixed(3)} ${p.rotation})` +
+            ` (size 0.8 1.0) (layers "F.Cu" "F.Paste" "F.Mask") ${netToken(nid, netById)} (tstamp ${uuid()}))`
           );
         }
+        if (placeholders)
+          L.push(`    (property "FOSS_PLACEHOLDER" "${placeholders} unverified SOT-23 pin(s) on net 0 — assign nets in KiCad")`);
       }
     }
     L.push(`  )`);
@@ -84,11 +96,29 @@ export function fossToKicadPcb(pcb: FossPcb): string {
   for (const t of pcb.pcb_traces ?? []) {
     const id = netId.get(t.net) ?? 0;
     const layer = t.layer === 'Top' ? 'F.Cu' : 'B.Cu';
+    const name = netById.get(id) ?? '';
     for (let i = 0; i + 1 < t.pts_mm.length; i++) {
       const [x1, y1] = t.pts_mm[i];
       const [x2, y2] = t.pts_mm[i + 1];
       if (Math.hypot(x2 - x1, y2 - y1) < 1e-9) continue;
-      L.push(`  (segment (start ${x1} ${y1}) (end ${x2} ${y2}) (width ${t.width_mm}) (layer "${layer}") (net ${id}) (tstamp ${uuid()}))`);
+      L.push(
+        `  (segment (start ${x1} ${y1}) (end ${x2} ${y2}) (width ${t.width_mm})` +
+        ` (layer "${layer}") ${netToken(id, netById)} (tstamp ${uuid()}))`
+      );
+    }
+  }
+  // Board outline on Edge.Cuts — without it KiCad flags invalid_outline and
+  // refuses to plot/zone-fill meaningfully.
+  const { board_width_mm: bw, board_height_mm: bh } = pcb.project_metadata.pcb_specifications;
+  if (bw > 0 && bh > 0) {
+    const corners: [number, number][] = [[0, 0], [bw, 0], [bw, bh], [0, bh], [0, 0]];
+    for (let i = 0; i + 1 < corners.length; i++) {
+      const [x1, y1] = corners[i];
+      const [x2, y2] = corners[i + 1];
+      L.push(
+        `  (gr_line (start ${x1} ${y1}) (end ${x2} ${y2}) (stroke (width 0.1) (type solid))` +
+        ` (layer "Edge.Cuts") (tstamp ${uuid()}))`
+      );
     }
   }
   L.push(')');

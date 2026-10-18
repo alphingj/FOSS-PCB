@@ -26,7 +26,7 @@ let cur = '';
 for (const l of lines) {
   const fp = l.match(/\(property "Reference" "([^"]+)"\)/);
   if (fp) cur = fp[1];
-  const pm = l.match(/\(pad "(\d)" .* \(net (\d+)\)/);
+  const pm = l.match(/\(pad "(\d)" .* \(net (\d+)/);
   if (pm && cur) (u1pads[cur] = u1pads[cur] || {})[pm[1]] = +pm[2];
 }
 assert(u1pads.U1['2'] === 7, 'U1 pad2 FB->7', JSON.stringify(u1pads.U1));
@@ -45,7 +45,7 @@ let curDes = '';
 for (const l of s.split('\n')) {
   const fp = l.match(/\(property "Reference" "([^"]+)"\)/);
   if (fp) curDes = fp[1];
-  const pm = l.match(/\(pad "(\d)" .* \(net (\d+)\)/);
+  const pm = l.match(/\(pad "(\d)" .* \(net (\d+)/);
   if (pm && curDes) {
     const k = `${curDes}:${pm[1]}`;
     if (curDes === 'R1' || curDes === 'D1' || curDes === 'L1') r1pads[k] = +pm[2];
@@ -82,7 +82,7 @@ let curS = '';
 for (const l of ss.split('\n')) {
   const fp = l.match(/\(property "Reference" "([^"]+)"\)/);
   if (fp) curS = fp[1];
-  const pm = l.match(/\(pad "(\d)" .* \(net (\d+)\)/);
+  const pm = l.match(/\(pad "(\d)" .* \(net (\d+)/);
   if (pm && curS) (sotPads[curS] = sotPads[curS] || {})[pm[1]] = +pm[2];
 }
 // net ids: GND=1 G9=2 D9=3 FB9=4 K9=5 O1=6 O2=7 VCC8=8
@@ -90,4 +90,23 @@ assert(sotPads.Q9['1'] === 2 && sotPads.Q9['2'] === 1 && sotPads.Q9['3'] === 3, 
 assert(sotPads.U9['1'] === 5 && sotPads.U9['2'] === 4 && sotPads.U9['3'] === 1, 'TL431 nets', JSON.stringify(sotPads.U9));
 assert(sotPads.U8['1'] === 6 && sotPads.U8['4'] === 1 && sotPads.U8['7'] === 7 && sotPads.U8['8'] === 8, 'LM358 nets', JSON.stringify(sotPads.U8));
 assert(sotPads.U8['2'] === 0 && sotPads.U8['3'] === 0, 'LM358 unconnected inputs stay net 0');
+
+// --- KiCad-loadability contract (verified against real kicad-cli 10) ---
+// KiCad >= 6 rejects bare `(net N)`; the name is mandatory, empty for net 0.
+assert(!/\(net \d+\)/.test(s), 'every net token carries a name');
+assert(s.includes('(net 0 "")'), 'net 0 uses the empty name');
+assert(s.includes('(net 7 "FB")'), 'named nets include their name');
+// Pad `at` is a footprint-relative offset; pre-rotating double-transforms it.
+const firstPad = s.split('\n').find((l) => l.includes('(pad '));
+const at = firstPad.match(/\(at (-?[\d.]+) (-?[\d.]+)/);
+assert(Math.abs(+at[1]) <= 3 && Math.abs(+at[2]) <= 3, 'pad offsets are local, not absolute', firstPad);
+// SOIC-8 land: 1.27 pitch means pads must be <= 1.0 tall in Y or they overlap.
+assert(s.includes('(size 1.95 0.6)'), 'SOIC-8 pad is 1.95 x 0.6 (fits 1.27 pitch)');
+// No inline `;` comments — the KiCad s-expr parser treats them as garbage.
+assert(!/;\s*PLACEHOLDER/.test(s), 'no inline semicolon comments');
+assert(s.includes('FOSS_PLACEHOLDER'), 'placeholder kept as a footprint property');
+// Edge.Cuts outline present, else KiCad reports invalid_outline.
+const edges = s.split('\n').filter((l) => l.includes('"Edge.Cuts"'));
+assert(edges.length === 4, '4 Edge.Cuts outline segments', edges.length);
+
 console.log('ALL PAD CHECKS PASSED');
