@@ -78,6 +78,8 @@ No secrets live in this repo — thumbprints/identities go in local config only.
   real path; DRC covers bounds/nets/heuristic zones, not full clearance.
 - STEP export is a manifest stub until CadQuery/PythonOCC is wired.
 - Scope/Lab run a local bench: value parsing (R/C/L strings → SI, incl. 4K7
-  notation), MNA DC divider check, and a CCM cycle-average switching model
-  with Vf/Rds/DCR solved by bisection — no SPICE yet; ngspice linking is next.
+  notation and case-sensitive M vs m), MNA DC divider check, and a CCM
+  cycle-average switching model with Vf/Rds/DCR solved by bisection — no
+  SPICE yet; ngspice linking is next. The SPICE export takes its duty cycle
+  from that same solved operating point rather than a fixed 0.5.
 - Android later: viewer/lab only, not the full editor.

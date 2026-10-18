@@ -16,6 +16,32 @@ assert(parseCurrent('47uH_3.5A') === 3.5, 'Isat 3.5A');
 assert(Number.isNaN(parseResistance('blah')), 'R garbage -> NaN');
 assert(parseResistance('4K7') === 4700, 'R 4K7 european');
 assert(parseResistance('4R7') === 4.7, 'R 4R7 european');
+// Case-sensitive: 'M' = mega, 'm' = milli. Current-sense shunts are 10m.
+assert(parseResistance('10m') === 0.01, 'R 10m milliohm', parseResistance('10m'));
+assert(parseResistance('10mΩ') === 0.01, 'R 10mΩ milliohm');
+assert(parseResistance('10mR') === 0.01, 'R 10mR milliohm');
+assert(parseResistance('10M') === 1e7, 'R 10M megaohm');
+assert(parseResistance('1M5') === 1.5e6, 'R 1M5 european mega');
+
+// The value must lead the string. An unanchored search returned 603 ohm for
+// "100nF 0603", 2.54 ohm for the footprint "2x04_P2.54", and 3400 ohm for
+// the part number "AO3400" — all silently wrong.
+assert(parseResistance('100nF 0603') !== 603, 'R does not read a trailing package code');
+assert(Number.isNaN(parseResistance('2x04_P2.54')), 'R footprint string -> NaN');
+assert(Number.isNaN(parseResistance('AO3400')), 'R part number -> NaN');
+assert(Number.isNaN(parseResistance('ESP32-WROOM-32-N4')), 'R part number with dashes -> NaN');
+assert(parseResistance('10k_0805') === 10000, 'R value then underscore suffix still parses');
+
+// Frequency must not read as farads/henries: 16MHz is a crystal.
+assert(Number.isNaN(parseCapacitance('16MHz')), 'C crystal freq -> NaN');
+assert(Number.isNaN(parseInductance('16MHz')), 'L crystal freq -> NaN', parseInductance('16MHz'));
+assert(Number.isNaN(parseInductance('100V_150mA')), 'L voltage string -> NaN');
+// Trailing ratings must not be mistaken for the component value.
+assert(close(parseCapacitance('100nF 0603'), 100e-9), 'C value leads, package code ignored');
+// Current ratings carry their own multiplier: 150mA is 0.15 A.
+assert(close(parseCurrent('100V_150mA'), 0.15), 'I 150mA -> 0.15A', parseCurrent('100V_150mA'));
+assert(close(parseCurrent('3.3V_1A'), 1), 'I 1A trailing');
+assert(close(parseCapacitance('4n7'), 4.7e-9), 'C 4n7 european nano');
 
 // MNA on demo board: FB divider 38.3k/10k at VOUT=-12 -> |FB| ~ 2.484V
 const fb = checkFeedback(SAMPLE_BUCKBOOST, -12);

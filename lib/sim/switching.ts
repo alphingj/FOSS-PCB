@@ -3,10 +3,41 @@
 // steady state directly: bisection on D is monotonic hence unconditionally
 // stable. Idealizations: CCM only, constant Vf/Rds/DCR, no ESR/switching loss.
 // Interface is unchanged so Lab/Scope panels need no edits.
+import type { FossPcb } from '../foss-schema';
+import { toNum, parseInductance, parseCurrent, parseCapacitance } from './values';
 export interface SwitchingParams {
   vin: number; voutTargetAbs: number; iout: number;
   freqHz: number; inductanceH: number; CoutF: number;
   vf?: number; rds?: number; dcr?: number;
+}
+
+/** Bench inputs for a board, with every default recorded so the UI can say
+ *  which values came from the design and which were assumed. Lab and the
+ *  SPICE export both call this so the two can never drift apart. */
+export interface BenchParams {
+  vin: number; voutAbs: number; iout: number; freqHz: number;
+  inductanceH: number; coutF: number; isat: number;
+  l1src: string; coutSrc: string;
+}
+
+export function benchParams(pcb: FossPcb): BenchParams {
+  const assumed = (pcb.project_metadata.assumed_parameters ?? {}) as Record<string, unknown>;
+  const l1 = pcb.components.find((c) => c.designator === 'L1');
+  const c2 = pcb.components.find((c) => c.designator === 'C2');
+  const Lh = l1 ? parseInductance(l1.value) : NaN;
+  const isat = l1 ? parseCurrent(l1.value) : NaN;
+  const Cout = c2 ? parseCapacitance(c2.value) : NaN;
+  return {
+    vin: toNum(assumed.vin_min_v ?? assumed.vin_v ?? 12, 12),
+    voutAbs: Math.abs(toNum(assumed.vout_nominal_v ?? assumed.vout_v ?? 12, 12)),
+    iout: toNum(assumed.iout_max_a ?? assumed.iout_a ?? 1, 1),
+    freqHz: toNum(assumed.switching_frequency_hz ?? assumed.freq_hz ?? 100000, 100000),
+    inductanceH: Number.isFinite(Lh) ? Lh : 47e-6,
+    coutF: Number.isFinite(Cout) ? Cout : 100e-6,
+    isat: Number.isFinite(isat) ? isat : 3.5,
+    l1src: l1 ? 'L1' : 'default 47uH',
+    coutSrc: c2 ? 'C2' : 'default 100uF',
+  };
 }
 
 export interface SwitchingResult {

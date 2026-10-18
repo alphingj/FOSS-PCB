@@ -1,8 +1,8 @@
-'use client';
+﻿'use client';
 import { useMemo } from 'react';
 import { useStore } from '../lib/store';
-import { toNum, parseInductance, parseCurrent, parseCapacitance } from '../lib/sim/values';
-import { simulateBuckBoost } from '../lib/sim/switching';
+import { toNum } from '../lib/sim/values';
+import { simulateBuckBoost, benchParams } from '../lib/sim/switching';
 import { checkFeedback } from '../lib/sim/mna';
 import { FAULT_MATRIX } from '../lib/sim/faults';
 import { table, muted } from '../lib/theme';
@@ -12,22 +12,13 @@ export default function LabPanel() {
   const bench = useMemo(() => {
     if (!pcb) return null;
     const assumed = (pcb.project_metadata.assumed_parameters ?? {}) as Record<string, unknown>;
-    const l1 = pcb.components.find((c) => c.designator === 'L1');
-    const c2 = pcb.components.find((c) => c.designator === 'C2');
-    const Lh = l1 ? parseInductance(l1.value) : NaN;
-    const isat = l1 ? parseCurrent(l1.value) : NaN;
-    const Cout = c2 ? parseCapacitance(c2.value) : NaN;
-    const vin = toNum(assumed.vin_min_v ?? assumed.vin_v ?? 12, 12);
-    const vout = Math.abs(toNum(assumed.vout_nominal_v ?? assumed.vout_v ?? 12, 12));
-    const iout = toNum(assumed.iout_max_a ?? assumed.iout_a ?? 1, 1);
-    const freq = toNum(assumed.switching_frequency_hz ?? assumed.freq_hz ?? 100000, 100000);
+    const p = benchParams(pcb);
     const sim = simulateBuckBoost({
-      vin, voutTargetAbs: vout, iout, freqHz: freq,
-      inductanceH: Number.isFinite(Lh) ? Lh : 47e-6,
-      CoutF: Number.isFinite(Cout) ? Cout : 100e-6,
+      vin: p.vin, voutTargetAbs: p.voutAbs, iout: p.iout, freqHz: p.freqHz,
+      inductanceH: p.inductanceH, CoutF: p.coutF,
     });
     const fb = checkFeedback(pcb, toNum(assumed.vout_nominal_v ?? -12, -12));
-    return { sim, fb, isat: Number.isFinite(isat) ? isat : 3.5, l1src: l1 ? 'L1' : 'default 47µH', coutSrc: c2 ? 'C2' : 'default 100µF' };
+    return { sim, fb, isat: p.isat, l1src: p.l1src, coutSrc: p.coutSrc };
   }, [pcb]);
 
   if (!pcb || !bench) return <div style={muted}>Lab appears after build.</div>;
@@ -41,8 +32,8 @@ export default function LabPanel() {
         <div style={{ color: 'var(--danger)', fontSize: 13 }}>Cannot simulate: {sim.warnings.join('; ')}</div>
       ) : (
         <div style={{ fontSize: 13 }}>
-          D = {sim.D.toFixed(3)} ({(sim.D * 100).toFixed(1)}%) · Ipk {sim.iPeak.toFixed(2)}A vs Isat {isat}A ·
-          Vout {sim.vAvgAbs.toFixed(2)}V ± {(sim.vRipple * 1000).toFixed(0)}mV{!sim.settled && ' (unsettled)'}
+          D = {sim.D.toFixed(3)} ({(sim.D * 100).toFixed(1)}%) Â· Ipk {sim.iPeak.toFixed(2)}A vs Isat {isat}A Â·
+          Vout {sim.vAvgAbs.toFixed(2)}V Â± {(sim.vRipple * 1000).toFixed(0)}mV{!sim.settled && ' (unsettled)'}
           {sim.warnings.map((w) => <div key={w} style={{ color: 'var(--warning)' }}>{w}</div>)}
         </div>
       )}
