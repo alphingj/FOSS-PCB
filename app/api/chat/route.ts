@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
     }
 
     // openrouter + custom (OpenAI-compatible)
-    const base = (baseUrl || 'https://openrouter.ai/api/v1').replace(/\/$/, '');
+    const base = (baseUrl ?? 'https://openrouter.ai/api/v1').replace(/\/$/, '');
     if (!hostAllowed(base)) return NextResponse.json({ error: 'Blocked baseUrl (private/local hosts not allowed except loopback http)' }, { status: 400 });
     const url = `${base}/chat/completions`;
     const { Authorization, authorization, ...safeExtra } = (extraHeaders ?? {}) as Record<string, string>;

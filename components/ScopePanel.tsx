@@ -1,8 +1,8 @@
 'use client';
 import { useEffect, useRef } from 'react';
 import { useStore } from '../lib/store';
-import { toNum, parseInductance, parseCapacitance } from '../lib/sim/values';
-import { simulateBuckBoost } from '../lib/sim/switching';
+import { toNum } from '../lib/sim/values';
+import { simulateBuckBoost, benchParams } from '../lib/sim/switching';
 
 // Switching-cycle waveforms from the sim bench (placeholder until ngspice).
 // Yellow: inductor current. Blue: output voltage (AC-exaggerated around average).
@@ -15,16 +15,12 @@ export default function ScopePanel() {
     if (!cv || !pcb) return;
     const ctx = cv.getContext('2d');
     if (!ctx) return;
-    const assumed = (pcb.project_metadata.assumed_parameters ?? {}) as Record<string, unknown>;
-    const l1 = pcb.components.find((c) => c.designator === 'L1');
-    const c2 = pcb.components.find((c) => c.designator === 'C2');
+    // Same solved operating point as LabPanel — single source of truth via
+    // benchParams, so Scope can never drift from the Lab's prediction.
+    const p = benchParams(pcb);
     const sim = simulateBuckBoost({
-      vin: toNum(assumed.vin_min_v ?? assumed.vin_v ?? 12, 12),
-      voutTargetAbs: Math.abs(toNum(assumed.vout_nominal_v ?? assumed.vout_v ?? 12, 12)),
-      iout: toNum(assumed.iout_max_a ?? assumed.iout_a ?? 1, 1),
-      freqHz: toNum(assumed.switching_frequency_hz ?? assumed.freq_hz ?? 100000, 100000),
-      inductanceH: parseInductance(l1?.value ?? '') || 47e-6,
-      CoutF: parseCapacitance(c2?.value ?? '') || 100e-6,
+      vin: p.vin, voutTargetAbs: p.voutAbs, iout: p.iout, freqHz: p.freqHz,
+      inductanceH: p.inductanceH, CoutF: p.coutF,
     });
     if (!sim.valid || !sim.iWave.length) {
       ctx.fillStyle = '#05070a';

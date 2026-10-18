@@ -24,7 +24,7 @@ export async function chatDirect(provider: ProviderConfig, userPrompt: string): 
     const j = await r.json();
     return j?.content?.map((b: any) => b.text ?? '').join('\n') ?? JSON.stringify(j);
   }
-  const url = `${(provider.baseUrl || 'https://openrouter.ai/api/v1').replace(/\/$/, '')}/chat/completions`;
+  const url = `${(provider.baseUrl ?? 'https://openrouter.ai/api/v1').replace(/\/$/, '')}/chat/completions`;
   const r = await fetch(url, {
     method: 'POST',
     headers: {
