@@ -1,6 +1,6 @@
 // KiCad s-expr interop (TS side). Python (kicad_compat.py) mirrors the export shape.
 import type { FossPcb } from './foss-schema';
-import { soic8Pads, pinoutFor, rot2, twoPinGeom, SOT23_PADS } from './kicad-pads';
+import { soic8Pads, pinoutFor, twoPinGeom, SOT23_PADS } from './kicad-pads';
 
 function uuid(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
@@ -16,10 +16,11 @@ function pinNetId(pcb: FossPcb, netId: Map<string, number>, des: string, label: 
   return 0;
 }
 
-/** KiCad >= 6 requires the net *name* alongside the id; net 0 is the empty name. */
-function netToken(nid: number, byId: Map<number, string>): string {
-  const name = byId.get(nid);
-  return name === undefined ? '(net 0 "")' : `(net ${nid} "${name.replace(/"/g, '')}")`;
+/** KiCad requires a quoted name in every `(net ...)` field, including the
+ *  reserved unconnected net 0 (written as an empty string by KiCad itself).
+ *  Verified: `(net 0)` alone makes kicad-cli refuse to load the board. */
+function netField(nid: number, netName: (id: number) => string): string {
+  return `(net ${nid} "${String(netName(nid)).replace(/"/g, '')}")`;
 }
 
 /** FOSS JSON -> loadable .kicad_pcb: numeric net ids (0 reserved), segments as
@@ -30,12 +31,21 @@ export function fossToKicadPcb(pcb: FossPcb): string {
   const L: string[] = ['(kicad_pcb (version 20240101) (generator foss-pcb) (general) (paper "A4")'];
   pcb.nets.forEach((n, i) => L.push(`  (net ${i + 1} "${n.net_name.replace(/"/g, '')}")`));
   const netId = new Map(pcb.nets.map((n, i) => [n.net_name, i + 1]));
-  const netById = new Map(pcb.nets.map((n, i) => [i + 1, n.net_name] as const));
+  const netNameOf = (id: number) => (id === 0 ? '' : pcb.nets[id - 1]?.net_name ?? '');
+  // Pads and fields are emitted as LOCAL offsets from the footprint origin and
+  // KiCad applies the footprint `(at x y rot)` itself — the same convention as
+  // a real .kicad_mod. Pre-rotating offsets here (as an earlier version did)
+  // double-rotated every part; caught by kicad-cli DRC on the 90-degree R3.
+  const at = (dx: number, dy: number, rot: number) => ` (at ${dx.toFixed(3)} ${dy.toFixed(3)} ${rot})`;
   for (const c of pcb.components) {
     const p = c.pcb_placement_mm;
     L.push(`  (footprint "${c.footprint}" (layer "F.Cu") (tstamp ${uuid()}) (at ${p.x} ${p.y} ${p.rotation})`);
-    L.push(`    (property "Reference" "${c.designator}")`);
-    L.push(`    (property "Value" "${c.value.replace(/"/g, '')}")`);
+    // Reference sits above the part on F.SilkS; Value is hidden. Without
+    // (at)/(layer) KiCad places fields over the pads and DRC flags
+    // silk_over_copper (verified with kicad-cli 10.0.6).
+    L.push(`    (property "Reference" "${c.designator}" (at 0 -2 0) (layer "F.SilkS") (uuid ${uuid()}) (effects (font (size 1 1) (thickness 0.15))))`);
+    L.push(`    (property "Value" "${c.value.replace(/"/g, '')}" (at 0 2 0) (layer "F.Fab") (hide yes) (uuid ${uuid()}) (effects (font (size 1 1) (thickness 0.15))))`);
+    L.push(`    (attr smd)`);
     if (c.mpn) L.push(`    (property "MPN" "${c.mpn.replace(/"/g, '')}")`);
     if (c.footprint.includes('SOIC-8')) {
       // Real pads. Nets resolve through the verified pinout table; pads whose
@@ -43,20 +53,18 @@ export function fossToKicadPcb(pcb: FossPcb): string {
       const pinout = pinoutFor(c.mpn);
       const numOf = new Map<string, number>();
       if (pinout) for (const [label, num] of Object.entries(pinout)) numOf.set(label, num);
-      let placeholders = 0;
+      let unverified = 0;
       for (const pad of soic8Pads()) {
         const label = Array.from(numOf.entries()).find(([, n]) => n === pad.n)?.[0];
+        if (!label) unverified++;
         const nid = label ? pinNetId(pcb, netId, c.designator, label) : 0;
-        if (!label) placeholders++;
-        // KiCad treats pad `at` as an offset from the footprint origin and applies
-        // the footprint rotation itself — emit raw local offsets, never pre-rotated.
         L.push(
-          `    (pad "${pad.n}" smd roundrect (at ${pad.dx.toFixed(3)} ${pad.dy.toFixed(3)} ${p.rotation})` +
-          ` (size 1.95 0.6) (layers "F.Cu" "F.Paste" "F.Mask") ${netToken(nid, netById)} (roundrect_rratio 0.25) (tstamp ${uuid()}))`
+          `    (pad "${pad.n}" smd roundrect${at(pad.dx, pad.dy, p.rotation)}` +
+          ` (size ${pad.w} ${pad.h}) (layers "F.Cu" "F.Paste" "F.Mask") ${netField(nid, netNameOf)} (roundrect_rratio 0.25) (tstamp ${uuid()}))`
         );
       }
-      if (placeholders)
-        L.push(`    (property "FOSS_PLACEHOLDER" "${placeholders} unverified pin(s) on net 0 — assign nets in KiCad")`);
+      if (unverified)
+        L.push(`    (property "FOSS_NOTE" "Pinout not verified for ${c.mpn.replace(/"/g, '') || c.designator} — ${unverified} pad(s) left on net 0")`);
     } else {
       const g2 = twoPinGeom(c.footprint);
       if (g2) {
@@ -69,56 +77,45 @@ export function fossToKicadPcb(pcb: FossPcb): string {
         ends.forEach(([lname, ox], i) => {
           const nid = pinNetId(pcb, netId, c.designator, lname);
           L.push(
-            `    (pad "${i + 1}" smd roundrect (at ${ox.toFixed(3)} 0 ${p.rotation})` +
-            ` (size ${g2.w} ${g2.h}) (layers "F.Cu" "F.Paste" "F.Mask") ${netToken(nid, netById)} (roundrect_rratio 0.25) (tstamp ${uuid()}))`
+            `    (pad "${i + 1}" smd roundrect${at(ox, 0, p.rotation)}` +
+            ` (size ${g2.w} ${g2.h}) (layers "F.Cu" "F.Paste" "F.Mask") ${netField(nid, netNameOf)} (roundrect_rratio 0.25) (tstamp ${uuid()}))`
           );
         });
       } else if (c.footprint.includes('SOT-23')) {
         // Nets resolve through verified pinouts (AO3400, TL431/DBZ); unknown
-        // MPNs stay net-0 with a marker.
+        // MPNs stay net-0 and the footprint carries a visible note property.
         const pinout = pinoutFor(c.mpn);
-        let placeholders = 0;
+        let unverified = 0;
         for (const pad of SOT23_PADS) {
           const label = pinout ? Object.keys(pinout).find((l) => pinout[l] === pad.n && l in c.pins) : undefined;
+          if (!label) unverified++;
           const nid = label ? pinNetId(pcb, netId, c.designator, label) : 0;
-          if (!label) placeholders++;
           L.push(
-            `    (pad "${pad.n}" smd rect (at ${pad.dx.toFixed(3)} ${pad.dy.toFixed(3)} ${p.rotation})` +
-            ` (size 0.8 1.0) (layers "F.Cu" "F.Paste" "F.Mask") ${netToken(nid, netById)} (tstamp ${uuid()}))`
+            `    (pad "${pad.n}" smd rect${at(pad.dx, pad.dy, p.rotation)}` +
+            ` (size ${pad.w} ${pad.h}) (layers "F.Cu" "F.Paste" "F.Mask") ${netField(nid, netNameOf)} (tstamp ${uuid()}))`
           );
         }
-        if (placeholders)
-          L.push(`    (property "FOSS_PLACEHOLDER" "${placeholders} unverified SOT-23 pin(s) on net 0 — assign nets in KiCad")`);
+        if (unverified)
+          L.push(`    (property "FOSS_NOTE" "SOT-23 pinout not verified for ${c.mpn.replace(/"/g, '')} — ${unverified} pad(s) left on net 0")`);
       }
     }
     L.push(`  )`);
   }
+  // Board outline on Edge.Cuts. Without it KiCad DRC reports
+  // "invalid_outline: Board has malformed outline (no edges found on
+  // Edge.Cuts layer)" — verified with kicad-cli 10.0.6.
+  const { board_width_mm: W, board_height_mm: H } = pcb.project_metadata.pcb_specifications;
+  const edge = (x1: number, y1: number, x2: number, y2: number) =>
+    `  (gr_line (start ${x1} ${y1}) (end ${x2} ${y2}) (layer "Edge.Cuts") (width 0.05) (tstamp ${uuid()}))`;
+  L.push(edge(0, 0, W, 0), edge(W, 0, W, H), edge(W, H, 0, H), edge(0, H, 0, 0));
   for (const t of pcb.pcb_traces ?? []) {
     const id = netId.get(t.net) ?? 0;
     const layer = t.layer === 'Top' ? 'F.Cu' : 'B.Cu';
-    const name = netById.get(id) ?? '';
     for (let i = 0; i + 1 < t.pts_mm.length; i++) {
       const [x1, y1] = t.pts_mm[i];
       const [x2, y2] = t.pts_mm[i + 1];
       if (Math.hypot(x2 - x1, y2 - y1) < 1e-9) continue;
-      L.push(
-        `  (segment (start ${x1} ${y1}) (end ${x2} ${y2}) (width ${t.width_mm})` +
-        ` (layer "${layer}") ${netToken(id, netById)} (tstamp ${uuid()}))`
-      );
-    }
-  }
-  // Board outline on Edge.Cuts — without it KiCad flags invalid_outline and
-  // refuses to plot/zone-fill meaningfully.
-  const { board_width_mm: bw, board_height_mm: bh } = pcb.project_metadata.pcb_specifications;
-  if (bw > 0 && bh > 0) {
-    const corners: [number, number][] = [[0, 0], [bw, 0], [bw, bh], [0, bh], [0, 0]];
-    for (let i = 0; i + 1 < corners.length; i++) {
-      const [x1, y1] = corners[i];
-      const [x2, y2] = corners[i + 1];
-      L.push(
-        `  (gr_line (start ${x1} ${y1}) (end ${x2} ${y2}) (stroke (width 0.1) (type solid))` +
-        ` (layer "Edge.Cuts") (tstamp ${uuid()}))`
-      );
+      L.push(`  (segment (start ${x1} ${y1}) (end ${x2} ${y2}) (width ${t.width_mm}) (layer "${layer}") ${netField(id, netNameOf)} (tstamp ${uuid()}))`);
     }
   }
   L.push(')');

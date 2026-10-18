@@ -12,23 +12,33 @@ def kicad_pcb_to_foss(text: str) -> dict:
     return {"footprints": footprints, "nets": [{"id": n[0], "name": n[1]} for n in nets]}
 
 
-# SOIC-8 pad geometry + verified pinouts. Source of truth is
-# lib/kicad-pads.ts — keep the numbers identical when editing either side.
-# SOURCES: TI UCx84x datasheet (COMP=1 VFB=2 ISENSE=3 RTCT=4 GND=5 OUT=6
-# VCC=7 VREF=8); TI NE555 datasheet (GND=1 TRIG=2 OUT=3 RESET=4 CONT=5
+# Pad geometry + verified pinouts. Source of truth is lib/kicad-pads.ts — keep
+# the numbers identical when editing either side. Geometry is read from the
+# official KiCad 10.0 footprint library on disk, NOT estimated.
+# PINOUT SOURCES: TI UCx84x datasheet (COMP=1 VFB=2 ISENSE=3 RTCT=4 GND=5
+# OUT=6 VCC=7 VREF=8); TI NE555 datasheet (GND=1 TRIG=2 OUT=3 RESET=4 CONT=5
 # THRES=6 DISCH=7 VCC=8).
-SOIC8_DX = 2.7
-SOIC8_DY = [1.905, 0.635, -0.635, -1.905]
+SOIC8_DX = 2.475
+# KiCad-native y-down offsets, verbatim from the .kicad_mod
+SOIC8_DY = [-1.905, -0.635, 0.635, 1.905]
+SOIC8_W = 1.95
+SOIC8_H = 0.6
 # Symmetric 2-pin footprints: pad centers at ±dx (pad "1" left, "2" right).
 # Nets attach per pin label so connectivity is exact regardless of convention.
+# (dx, w, h) from R_0805_2012Metric / D_SOD-123 / D_SMA .kicad_mod files.
 TWO_PIN = [
-    ("R_0805", 1.05, 1.0, 1.2),
-    ("C_0805", 1.05, 1.0, 1.2),
-    ("LED_0805", 1.05, 1.0, 1.2),
-    ("SOD-123", 1.6, 1.0, 1.1),
-    ("D_SMA", 2.1, 2.0, 2.0),
+    ("R_0805", 0.9125, 1.025, 1.4),
+    ("C_0805", 0.9125, 1.025, 1.4),
+    ("LED_0805", 0.9125, 1.025, 1.4),
+    ("SOD-123", 1.65, 0.9, 1.2),
+    ("D_SMA", 2.0, 2.5, 1.8),
 ]
-SOT23_PADS = [(1, -0.9, 0.95), (2, -0.9, -0.95), (3, 0.9, 0.0)]
+# (n, dx, dy, w, h) from Package_TO_SOT_SMD.pretty/SOT-23.kicad_mod
+SOT23_PADS = [
+    (1, -0.9375, -0.95, 1.475, 0.6),
+    (2, -0.9375, 0.95, 1.475, 0.6),
+    (3, 0.9375, 0.0, 1.475, 0.6),
+]
 PINOUTS = {
     "UC3843": {"VCC": 7, "OUT": 6, "FB": 2, "GND": 5},
     "NE555": {"GND": 1, "TRIG": 2, "OUT": 3, "RESET": 4, "CTRL": 5, "CONT": 5,
@@ -54,23 +64,34 @@ def _two_pin_geom(fp):
     return None
 
 
-def _net_tok(nid, net_ids):
-    """KiCad >= 6 requires the net *name* next to the id; net 0 is the empty name."""
-    for name, i in net_ids.items():
-        if i == nid:
-            return f'(net {nid} "{str(name).replace(chr(34), "")}")'
-    return '(net 0 "")'
-
-
 def _rot(dx, dy, rot):
     import math as _m
     r = _m.radians(rot or 0)
     return dx * _m.cos(r) - dy * _m.sin(r), dx * _m.sin(r) + dy * _m.cos(r)
 
 
-def _pad_lines(fp, mpn, des, net_nodes, net_ids, x, y, rot, pins):
+def _net_field(nid, net_names):
+    """KiCad requires a quoted name in every (net ...) field, including the
+    reserved unconnected net 0. Verified: '(net 0)' alone makes kicad-cli
+    refuse to load the board."""
+    name = "" if nid == 0 else _q(net_names[nid - 1]) if 0 < nid <= len(net_names) else ""
+    return f'(net {nid} "{name}")'
+
+
+def _pad_lines(fp, mpn, des, net_nodes, net_ids, net_names, rot, pins):
     """SOIC-8 with verified nets; symmetric 2-pin with exact per-label nets;
-    SOT-23 geometry net-0; anything else gets no pads (never guessed)."""
+    SOT-23 geometry net-0; anything else gets no pads (never guessed).
+    Pad coordinates are offsets from the footprint origin (KiCad places pads
+    relative to the footprint `(at ...)`), so they must NOT include x/y."""
+    def nid_for(label):
+        if not label:
+            return 0
+        for net_name in net_nodes:
+            if f"{des}.{label}" in net_nodes[net_name]:
+                return net_ids.get(net_name, 0)
+        return 0
+
+    notes = []
     if "SOIC-8" not in fp:
         geom = _two_pin_geom(fp)
         if geom and pins:
@@ -80,75 +101,51 @@ def _pad_lines(fp, mpn, des, net_nodes, net_ids, x, y, rot, pins):
             order = [first] + [l for l in labels if l != first]
             out = []
             for i, label in enumerate(order[:2]):
-                nid = 0
-                for net_name in net_nodes:
-                    if f"{des}.{label}" in net_nodes[net_name]:
-                        nid = net_ids.get(net_name, 0)
-                        break
                 ox = -dx if i == 0 else dx
-                # raw local offset — KiCad applies the footprint rotation itself
                 out.append(
-                    f'    (pad "{i + 1}" smd roundrect (at {ox:.3f} 0 {rot})'
-                    f' (size {w} {h}) (layers "F.Cu" "F.Paste" "F.Mask") {_net_tok(nid, net_ids)}'
+                    f'    (pad "{i + 1}" smd roundrect (at {ox:.3f} 0.000 {rot})'
+                    f' (size {w} {h}) (layers "F.Cu" "F.Paste" "F.Mask")'
+                    f' {_net_field(nid_for(label), net_names)}'
                     f' (roundrect_rratio 0.25) (tstamp {uuid4()}))'
                 )
             return out
         if "SOT-23" in fp:
             table = _pinout_for(mpn) or {}
             out = []
-            placeholders = 0
-            for n, dx, dy in SOT23_PADS:
+            unverified = 0
+            for n, dx, dy, w, h in SOT23_PADS:
                 label = next((l for l, num in table.items() if num == n and l in pins), None)
-                nid = 0
-                if label:
-                    for net_name in net_nodes:
-                        if f"{des}.{label}" in net_nodes[net_name]:
-                            nid = net_ids.get(net_name, 0)
-                            break
-                else:
-                    placeholders += 1
-                # pad `at` is an offset from the footprint origin; KiCad applies the
-                # footprint rotation itself, so emit raw local offsets
+                if not label:
+                    unverified += 1
                 out.append(
                     f'    (pad "{n}" smd rect (at {dx:.3f} {dy:.3f} {rot})'
-                    f' (size 0.8 1.0) (layers "F.Cu" "F.Paste" "F.Mask") {_net_tok(nid, net_ids)}'
-                    f' (tstamp {uuid4()}))'
+                    f' (size {w} {h}) (layers "F.Cu" "F.Paste" "F.Mask")'
+                    f' {_net_field(nid_for(label), net_names)} (tstamp {uuid4()}))'
                 )
-            if placeholders:
-                out.append(
-                    f'    (property "FOSS_PLACEHOLDER" "{placeholders} unverified SOT-23 pin(s) '
-                    f'on net 0 — assign nets in KiCad")'
-                )
+            if unverified:
+                notes.append(f'SOT-23 pinout not verified for {mpn} — {unverified} pad(s) left on net 0')
             return out
         return []
     table = _pinout_for(mpn) or {}
     label_of = {num: label for label, num in table.items()}
     out = []
-    placeholders = 0
+    unverified = 0
     for i in range(8):
         n = i + 1
         dx = -SOIC8_DX if n <= 4 else SOIC8_DX
         dy = SOIC8_DY[(n - 1) % 4]
         label = label_of.get(n)
-        nid = 0
-        if label:
-            for net_name in net_nodes:
-                if f"{des}.{label}" in net_nodes[net_name]:
-                    nid = net_ids.get(net_name, 0)
-                    break
-        else:
-            placeholders += 1
+        if not label:
+            unverified += 1
         out.append(
             f'    (pad "{n}" smd roundrect (at {dx:.3f} {dy:.3f} {rot})'
-            f' (size 1.95 0.6) (layers "F.Cu" "F.Paste" "F.Mask") {_net_tok(nid, net_ids)}'
+            f' (size {SOIC8_W} {SOIC8_H}) (layers "F.Cu" "F.Paste" "F.Mask")'
+            f' {_net_field(nid_for(label), net_names)}'
             f' (roundrect_rratio 0.25) (tstamp {uuid4()}))'
         )
-    if placeholders:
-        out.append(
-            f'    (property "FOSS_PLACEHOLDER" "{placeholders} unverified pin(s) on net 0 '
-            f'— assign nets in KiCad")'
-        )
-    return out
+    if unverified:
+        notes.append(f'Pinout not verified for {mpn or des} — {unverified} pad(s) left on net 0')
+    return out + [f'    (property "FOSS_NOTE" "{_q(notes[0])}")'] if notes else out
 
 
 def _q(v) -> str:
@@ -163,7 +160,7 @@ def foss_to_kicad_pcb(foss: dict) -> str:
         name = _q(n.get("net_name", ""))
         if not name:
             name = f"NET{i}"
-        net_ids[n.get("net_name") or name] = i
+        net_ids[n.get("net_name")] = i
         lines.append(f'  (net {i} "{name}")')
     for c in foss.get("components", []):
         p = c.get("pcb_placement_mm", {}) or {}
@@ -171,21 +168,36 @@ def foss_to_kicad_pcb(foss: dict) -> str:
         lines.append(
             f'  (footprint "{fp}" (layer "F.Cu")'
             f' (at {p.get("x", 0)} {p.get("y", 0)} {p.get("rotation", 0)})'
-            f' (property "Reference" "{_q(c.get("designator", ""))}")'
-            f' (property "Value" "{_q(c.get("value", ""))}")'
+            f' (property "Reference" "{_q(c.get("designator", ""))}"'
+            f' (at 0 -2 0) (layer "F.SilkS") (uuid {uuid4()})'
+            f' (effects (font (size 1 1) (thickness 0.15))))'
+            f' (property "Value" "{_q(c.get("value", ""))}"'
+            f' (at 0 2 0) (layer "F.Fab") (hide yes) (uuid {uuid4()})'
+            f' (effects (font (size 1 1) (thickness 0.15))))'
+            f' (attr smd)'
             + (f' (property "MPN" "{_q(c.get("mpn", ""))}")' if c.get("mpn") else "")
         )
         net_nodes = {n.get("net_name"): (n.get("nodes", []) or []) for n in nets}
         lines.extend(_pad_lines(
             fp, c.get("mpn", ""), c.get("designator", ""), net_nodes, net_ids,
-            float(p.get("x", 0)), float(p.get("y", 0)), float(p.get("rotation", 0)),
+            [n.get("net_name", "") for n in nets], float(p.get("rotation", 0)),
             c.get("pins", {}) or {},
         ))
         lines.append("  )")
-    net_tok = _net_tok(0, net_ids)
+    # Board outline on Edge.Cuts — without it KiCad DRC reports a malformed
+    # outline. Verified with kicad-cli 10.0.6.
+    spec = (foss.get("project_metadata", {}) or {}).get("pcb_specifications", {}) or {}
+    w = float(spec.get("board_width_mm", 0) or 0)
+    h = float(spec.get("board_height_mm", 0) or 0)
+    if w > 0 and h > 0:
+        for (x1, y1), (x2, y2) in (((0, 0), (w, 0)), ((w, 0), (w, h)),
+                                   ((w, h), (0, h)), ((0, h), (0, 0))):
+            lines.append(
+                f'  (gr_line (start {x1} {y1}) (end {x2} {y2})'
+                f' (layer "Edge.Cuts") (width 0.05) (tstamp {uuid4()}))'
+            )
     for t in foss.get("pcb_traces", []):
         nid = net_ids.get(t.get("net"), 0)
-        net_tok = _net_tok(nid, net_ids)
         layer = "F.Cu" if t.get("layer", "Top") == "Top" else "B.Cu"
         pts = t.get("pts_mm", []) or []
         for (x1, y1), (x2, y2) in zip(pts, pts[1:]):
@@ -193,18 +205,8 @@ def foss_to_kicad_pcb(foss: dict) -> str:
                 continue
             lines.append(
                 f'  (segment (start {x1} {y1}) (end {x2} {y2})'
-                f' (width {t.get("width_mm", 0.25)}) (layer "{layer}") {net_tok})'
-            )
-    # Board outline on Edge.Cuts — without it KiCad flags invalid_outline.
-    spec = ((foss.get("project_metadata") or {}).get("pcb_specifications") or {})
-    bw = float(spec.get("board_width_mm", 0) or 0)
-    bh = float(spec.get("board_height_mm", 0) or 0)
-    if bw > 0 and bh > 0:
-        corners = [(0, 0), (bw, 0), (bw, bh), (0, bh), (0, 0)]
-        for (x1, y1), (x2, y2) in zip(corners, corners[1:]):
-            lines.append(
-                f'  (gr_line (start {x1} {y1}) (end {x2} {y2})'
-                f' (stroke (width 0.1) (type solid)) (layer "Edge.Cuts") (tstamp {uuid4()}))'
+                f' (width {t.get("width_mm", 0.25)}) (layer "{layer}")'
+                f' {_net_field(nid, [n.get("net_name", "") for n in nets])})'
             )
     lines.append(")")
     return "\n".join(lines)

@@ -19,7 +19,7 @@ export const SAMPLE_BUCKBOOST: FossPcb = {
     { designator: 'U1', type: 'IC_PWM_Controller', value: 'UC3843B', mpn: 'UC3843BD1', footprint: 'SOIC-8_3.9x4.9mm_P1.27mm', pins: { VCC: 'VIN', OUT: 'GATE_DRV', FB: 'FB', GND: 'GND' }, schematic_pos: { x: 260, y: 360, rotation: 0 }, pcb_placement_mm: { x: 16, y: 8, rotation: 0, layer: 'Top' } },
     { designator: 'R3', type: 'Resistor', value: '10R', mpn: 'RC0805FR-0710RL', footprint: 'R_0805_2012Metric', pins: { '1': 'GATE_DRV', '2': 'GATE' }, schematic_pos: { x: 260, y: 290, rotation: 90 }, pcb_placement_mm: { x: 18, y: 16, rotation: 90, layer: 'Top' } },
     { designator: 'R1', type: 'Resistor', value: '38.3k', mpn: 'RC0805FR-0738K3L', footprint: 'R_0805_2012Metric', pins: { '1': 'VOUT', '2': 'FB' }, schematic_pos: { x: 560, y: 230, rotation: 90 }, pcb_placement_mm: { x: 36, y: 8, rotation: 0, layer: 'Top' } },
-    { designator: 'R2', type: 'Resistor', value: '10k', mpn: 'RC0805FR-0710KL', footprint: 'R_0805_2012Metric', pins: { '1': 'FB', '2': 'GND' }, schematic_pos: { x: 560, y: 310, rotation: 90 }, pcb_placement_mm: { x: 36, y: 5, rotation: 0, layer: 'Top' } },
+    { designator: 'R2', type: 'Resistor', value: '10k', mpn: 'RC0805FR-0710KL', footprint: 'R_0805_2012Metric', pins: { '1': 'FB', '2': 'GND' }, schematic_pos: { x: 560, y: 310, rotation: 90 }, pcb_placement_mm: { x: 36, y: 4.5, rotation: 0, layer: 'Top' } },
     { designator: 'J2', type: 'Connector_Terminal_2Pin', value: 'TERM_2P', mpn: 'MKDS_1_5_2', footprint: 'TerminalBlock_Phoenix_MKDS-1,5-2_5.08mm', pins: { '1': 'VOUT', '2': 'GND' }, schematic_pos: { x: 640, y: 200, rotation: 0 }, pcb_placement_mm: { x: 45, y: 17.5, rotation: 270, layer: 'Top' } },
   ],
   nets: [

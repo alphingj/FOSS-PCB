@@ -1,85 +1,134 @@
-"""KiCad round-trip gate: export the demo board through BOTH emitters (TS + Python),
-load each with real kicad-cli, and run DRC. Fails loudly if either won't parse.
+"""Export the demo board from BOTH emitters (TypeScript and Python) and prove
+each one loads in real KiCad with a clean DRC.
 
-Skipped (exit 0, message) when kicad-cli isn't installed.
+Skips (exit 0) when kicad-cli is not installed, so CI without KiCad stays green.
+
+Usage:
+    python python/kicad_verify.py            # verify if kicad-cli is on PATH
+    python python/kicad_verify.py --require   # fail if kicad-cli is missing
+
+The TS side is compiled to CommonJS first:
+    npx tsc lib/kicad-io.ts lib/sample-buckboost.ts --outDir <dir> \
+        --module commonjs --target es2020 --esModuleInterop --skipLibCheck
+Set KICAD_TS_OUT to point at that directory.
 """
 import json
 import os
-import re
-import subprocess as sp
+import shutil
+import subprocess
 import sys
+from pathlib import Path
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-KICAD = os.path.join(
-    os.environ.get("LOCALAPPDATA", ""), "Programs", "KiCad", "10.0", "bin", "kicad-cli.exe"
+ROOT = Path(__file__).resolve().parent.parent
+OUT = ROOT / "out" / "kicad-verify"
+TS_OUT = Path(os.environ.get("KICAD_TS_OUT", Path(os.environ.get("TEMP", "/tmp")) / "kicadverify"))
+
+REQUIRE = "--require" in sys.argv
+
+
+def find_kicad_cli():
+    exe = shutil.which("kicad-cli") or shutil.which("kicad-cli.exe")
+    if exe:
+        return exe
+    # Common per-user install location on Windows.
+    base = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "KiCad"
+    if base.is_dir():
+        for p in sorted(base.glob("*/bin/kicad-cli.exe"), reverse=True):
+            return str(p)
+    return None
+
+
+NODE_CODE = (
+    "const fs=require('fs');"
+    "const {fossToKicadPcb}=require(process.argv[1]);"
+    "const {SAMPLE_BUCKBOOST}=require(process.argv[2]);"
+    "fs.writeFileSync(process.argv[3], fossToKicadPcb(SAMPLE_BUCKBOOST));"
 )
-COMPILED = os.path.join(os.environ.get("TEMP", "."), "kicadverify")
-WORK = os.path.join(ROOT, "out", "kicad-verify")
 
 
-def ts_board() -> str:
-    code = (
-        "const fs=require('fs');"
-        "const {fossToKicadPcb}=require(process.argv[1]);"
-        "const {SAMPLE_BUCKBOOST}=require(process.argv[2]);"
-        "process.stdout.write(fossToKicadPcb(SAMPLE_BUCKBOOST));"
-    )
-    r = sp.run(
-        ["node", "-e", code,
-         os.path.join(COMPILED, "kicad-io.js"),
-         os.path.join(COMPILED, "sample-buckboost.js")],
-        capture_output=True, text=True, check=True,
-    )
-    return r.stdout
+def run_drc(kicad, board: Path):
+    rpt = board.with_suffix(".rpt")
+    r = subprocess.run([kicad, "pcb", "drc", "--output", str(rpt), str(board)],
+                       capture_output=True, text=True)
+    text = rpt.read_text(errors="replace") if rpt.exists() else ""
+    viol = 0
+    for line in text.splitlines():
+        if line.startswith("** Found ") and "violation" in line:
+            viol = int(line.split("** Found ")[1].split()[0])
+    return viol, text
 
 
-def py_board() -> str:
-    sys.path.insert(0, os.path.join(ROOT, "python"))
-    from foss_pcb.kicad_compat import foss_to_kicad_pcb
-    node = (
-        "const fs=require('fs');"
-        "const {SAMPLE_BUCKBOOST}=require(process.argv[1]);"
-        "process.stdout.write(JSON.stringify(SAMPLE_BUCKBOOST));"
-    )
-    r = sp.run(["node", "-e", node, os.path.join(COMPILED, "sample-buckboost.js")],
-               capture_output=True, text=True, check=True)
-    return foss_to_kicad_pcb(json.loads(r.stdout))
-
-
-def check(label: str, text: str) -> bool:
-    """Load + DRC in real KiCad. Errors are failures; silk warnings are not."""
-    os.makedirs(WORK, exist_ok=True)
-    pcb = os.path.join(WORK, f"{label}.kicad_pcb")
-    rpt = os.path.join(WORK, f"{label}-drc.rpt")
-    with open(pcb, "w", encoding="utf-8") as fh:
-        fh.write(text)
-    if os.path.exists(rpt):
-        os.remove(rpt)
-    r = sp.run([KICAD, "pcb", "drc", "--output", rpt, pcb], capture_output=True, text=True)
-    out = r.stdout + r.stderr
-    if r.returncode != 0 or "Failed to load" in out:
-        print(f"FAIL {label}: kicad-cli could not load the board\n{out.strip()}")
-        return False
-    report = open(rpt, encoding="utf-8").read() if os.path.exists(rpt) else ""
-    errors = [b for b in report.split("[") if b.startswith("clearance")
-              or b.startswith("invalid_outline") or b.startswith("malformed")
-              or b.startswith("copper_edge_clearance")]
-    unconn = len(re.findall(r"^\[unconnected_items\]", report, re.M))
-    silk = len(re.findall(r"^\[silk_over_copper\]", report, re.M))
-    print(f"ok   {label}: loads; {len(errors)} geometry errors, "
-          f"{unconn} unconnected (autoroute not run), {silk} silk warnings")
-    return not errors
-
-
-def main() -> int:
-    if not os.path.exists(KICAD):
-        print(f"skip: kicad-cli not found at {KICAD}")
+def main():
+    kicad = find_kicad_cli()
+    if not kicad:
+        msg = "kicad-cli not found - skipping real-KiCad verification"
+        if REQUIRE:
+            print("FAIL: " + msg)
+            return 1
+        print(msg)
         return 0
-    ok = check("ts-demo", ts_board())
-    ok = check("py-demo", py_board()) and ok
-    print("ALL KICAD ROUND-TRIP CHECKS PASSED" if ok else "KICAD ROUND-TRIP FAILED")
+
+    OUT.mkdir(parents=True, exist_ok=True)
+
+    # 1. TypeScript emitter
+    ts_mod = TS_OUT / "kicad-io.js"
+    sample_mod = TS_OUT / "sample-buckboost.js"
+    if not ts_mod.exists():
+        print(f"FAIL: {ts_mod} missing - compile the TS side first (see module docstring)")
+        return 1
+    ts_board = OUT / "demo-ts.kicad_pcb"
+    subprocess.run(["node", "-e", NODE_CODE, str(ts_mod), str(sample_mod), str(ts_board)],
+                   check=True)
+
+    # 2. Python emitter, fed the same board JSON
+    sample_ts = ROOT / "lib" / "sample-buckboost.ts"
+    board_json = OUT / "demo.json"
+    js = ("const {SAMPLE_BUCKBOOST}=require(process.argv[1]);"
+          "require('fs').writeFileSync(process.argv[2],"
+          "JSON.stringify(SAMPLE_BUCKBOOST,null,1));")
+    subprocess.run(["node", "-e", js, str(sample_mod), str(board_json)], check=True)
+
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(ROOT / "python")
+    py_board = OUT / "demo-py.kicad_pcb"
+    r = subprocess.run([sys.executable, "-m", "foss_pcb.kicad_compat", "--to-kicad"],
+                       input=board_json.read_text(), capture_output=True, text=True, env=env)
+    if r.returncode != 0:
+        print("FAIL: python emitter exit", r.returncode)
+        print(r.stderr[:800])
+        return 1
+    py_board.write_text(r.stdout)
+
+    ok = True
+    for label, board in (("typescript", ts_board), ("python", py_board)):
+        viol, text = run_drc(kicad, board)
+        fp_err = "** Found 0 Footprint errors **" in text
+        unconn = 0
+        for line in text.splitlines():
+            if line.startswith("** Found ") and "unconnected" in line:
+                unconn = int(line.split("** Found ")[1].split()[0])
+        status = "ok" if viol == 0 and fp_err else "FAIL"
+        if status == "FAIL":
+            ok = False
+        print(f"{status}: {label} emitter -> KiCad DRC {viol} violations, "
+              f"{unconn} unconnected (routed nets only)")
+        if viol:
+            print("\n".join(text.splitlines()[:20]))
+
+    # 3. Parity: both emitters must produce the same pad/nets shape.
+    ts_txt = ts_board.read_text()
+    py_txt = py_board.read_text()
+    def shape(t):
+        return (t.count("(pad "), t.count("(net "), t.count("(footprint "))
+    if shape(ts_txt) != shape(py_txt):
+        ok = False
+        print(f"FAIL: emitter parity TS{p.shape(ts_txt)} vs PY{shape(py_txt)}")
+    else:
+        print(f"ok: emitter parity (pads, nets, footprints) = {shape(ts_txt)}")
+
+    print("ALL KICAD CHECKS PASSED" if ok else "KICAD CHECKS FAILED")
     return 0 if ok else 1
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    sys.exit(main())

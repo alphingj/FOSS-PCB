@@ -5,9 +5,16 @@
 - `npx tsc --noEmit` clean, `npm run build` green
 - `cargo check` clean, `cargo test` 7/7 pass (router BFS, kicad parse, drc bounds)
 - Python: `python python/verify_plugins.py` exercises KiCad export + plugins
-- Executable suites: `simcheck` (16 asserts: values/MNA/switching), `routecheck`
-  (14: A*/DRC), `padcheck` (TS+Python KiCad pads), `spicecheck` (9: netlist),
-  `repaircheck` (validator loop) — run via `node scripts/prepare-checks.cjs`
+- Executable suites: `simcheck` (18 asserts: values/MNA/switching), `routecheck`
+  (15: A*/DRC), `padcheck` (TS+Python KiCad pads), `spicecheck` (9: netlist),
+  `fabcheck` (Gerber 4.6 widths/Excellon), `repaircheck` (validator loop) — run
+  via `node scripts/prepare-checks.cjs`
+- **Real KiCad**: `python python/kicad_verify.py` exports the demo board from
+  both emitters (TypeScript and Python), runs `kicad-cli pcb drc` on each and
+  asserts 0 violations plus emitter parity. Verified against KiCad 10.0.6 on
+  this machine; the script skips cleanly when KiCad is not installed, so CI
+  stays green either way. Pad geometry is read from the official KiCad
+  footprint library, not estimated.
 
 ## Run
 

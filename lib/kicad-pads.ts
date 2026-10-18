@@ -6,19 +6,27 @@
 
 export interface PadGeom {
   n: number;
-  dx: number; // mm from footprint origin, y-up like KiCad s-expr
+  dx: number; // mm from footprint origin, KiCad-native y-down (as in .kicad_mod)
   dy: number;
+  w: number; // pad size along x
+  h: number; // pad size along y
 }
 
+// Pad geometry read from the official KiCad 10.0 footprint library on disk
+// (share/kicad/footprints), NOT estimated. SOIC-8 source:
+// Package_SO.pretty/SOIC-8_3.9x4.9mm_P1.27mm.kicad_mod (pads at -2.475,
+// 1.95 x 0.6). An earlier hand-written table used 2.7 mm pitch with a
+// transposed 0.6 x 1.6 pad, which overlapped on a 1.27 mm pitch and failed
+// KiCad DRC with 29 clearance violations.
 const SOIC8_PADS: PadGeom[] = [
-  { n: 1, dx: -2.7, dy: 1.905 },
-  { n: 2, dx: -2.7, dy: 0.635 },
-  { n: 3, dx: -2.7, dy: -0.635 },
-  { n: 4, dx: -2.7, dy: -1.905 },
-  { n: 5, dx: 2.7, dy: -1.905 },
-  { n: 6, dx: 2.7, dy: -0.635 },
-  { n: 7, dx: 2.7, dy: 0.635 },
-  { n: 8, dx: 2.7, dy: 1.905 },
+  { n: 1, dx: -2.475, dy: -1.905, w: 1.95, h: 0.6 },
+  { n: 2, dx: -2.475, dy: -0.635, w: 1.95, h: 0.6 },
+  { n: 3, dx: -2.475, dy: 0.635, w: 1.95, h: 0.6 },
+  { n: 4, dx: -2.475, dy: 1.905, w: 1.95, h: 0.6 },
+  { n: 5, dx: 2.475, dy: 1.905, w: 1.95, h: 0.6 },
+  { n: 6, dx: 2.475, dy: 0.635, w: 1.95, h: 0.6 },
+  { n: 7, dx: 2.475, dy: -0.635, w: 1.95, h: 0.6 },
+  { n: 8, dx: 2.475, dy: -1.905, w: 1.95, h: 0.6 },
 ];
 
 /** MPN prefix -> pin label -> physical pad number. */
@@ -57,20 +65,23 @@ export interface TwoPinGeom {
 
 /** Symmetric 2-pin footprints: pad "1" left, pad "2" right. Nets attach per pin
  *  label ('1'->pad1, '2'->pad2, else first/second label e.g. A/K), so net
- *  connectivity is exact regardless of left/right convention. */
+ *  connectivity is exact regardless of left/right convention.
+ *  Geometry from the official KiCad library: R_0805_2012Metric (-0.9125,
+ *  1.025 x 1.4), D_SOD-123 (-1.65, 0.9 x 1.2), D_SMA (-2.0, 2.5 x 1.8). */
 export function twoPinGeom(fp: string): TwoPinGeom | null {
-  if (fp.includes('R_0805') || fp.includes('C_0805') || fp.includes('LED_0805')) return { dx: 1.05, w: 1.0, h: 1.2 };
-  if (fp.includes('SOD-123')) return { dx: 1.6, w: 1.0, h: 1.1 };
-  if (fp.includes('D_SMA')) return { dx: 2.1, w: 2.0, h: 2.0 };
+  if (fp.includes('R_0805') || fp.includes('C_0805') || fp.includes('LED_0805')) return { dx: 0.9125, w: 1.025, h: 1.4 };
+  if (fp.includes('SOD-123')) return { dx: 1.65, w: 0.9, h: 1.2 };
+  if (fp.includes('D_SMA')) return { dx: 2.0, w: 2.5, h: 1.8 };
   // NOTE: CP_Elec and SRR1280 deliberately absent — their land patterns vary
   // by manufacturer and are not yet sourced from a datasheet.
   return null;
 }
 
-/** SOT-23 land pattern (pads numbered positionally). Nets resolve through the
- *  verified pinout table (AO3400, TL431); unknown MPNs stay net-0. */
+/** SOT-23 land pattern from Package_TO_SOT_SMD.pretty/SOT-23.kicad_mod
+ *  (-0.9375, 1.475 x 0.6). Nets resolve through the verified pinout table
+ *  (AO3400, TL431); unknown MPNs stay net-0. */
 export const SOT23_PADS = [
-  { n: 1, dx: -0.9, dy: 0.95 },
-  { n: 2, dx: -0.9, dy: -0.95 },
-  { n: 3, dx: 0.9, dy: 0 },
+  { n: 1, dx: -0.9375, dy: -0.95, w: 1.475, h: 0.6 },
+  { n: 2, dx: -0.9375, dy: 0.95, w: 1.475, h: 0.6 },
+  { n: 3, dx: 0.9375, dy: 0, w: 1.475, h: 0.6 },
 ];
