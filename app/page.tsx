@@ -18,6 +18,7 @@ import LibraryPanel from '../components/LibraryPanel';
 import GroundingPanel from '../components/GroundingPanel';
 import FabPanel from '../components/FabPanel';
 import DiagnosticsPanel from '../components/DiagnosticsPanel';
+import PartGenerator from '../components/PartGenerator';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { card } from '../lib/theme';
 
@@ -30,6 +31,7 @@ const NAV: [string, string][] = [
   ['model', '3D Model'],
   ['lab', 'Test Lab'],
   ['library', 'Library'],
+  ['partgen', 'Part Generator'],
   ['fab', 'Fabrication'],
 ];
 
@@ -131,6 +133,12 @@ export default function Page() {
                 <GroundingPanel />
               </ErrorBoundary>
             </div>
+          </section>
+
+          <section id="partgen">
+            <ErrorBoundary name="Part generator">
+              <PartGenerator />
+            </ErrorBoundary>
           </section>
 
           <section id="fab" style={card}>

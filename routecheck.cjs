@@ -116,11 +116,17 @@ const vTraceSame = { ...board, pcb_vias: [
 ] };
 assert(!runDrc(vTraceSame).some((i) => i.message.includes('too close to trace')), 'same-net trace at via OK');
 
-// DRC: via too close to a different-net pad flagged
+// DRC: via too close to a different-net pad flagged (R_0805 pad 2 at x+0.9125)
 const vPad = { ...board, pcb_vias: [
-  { id: 'V1', net: 'GND', x: 10, y: 10, drill_mm: 0.3, pad_mm: 0.6 },
+  { id: 'V1', net: 'GND', x: 10.9125, y: 10, drill_mm: 0.3, pad_mm: 0.6 },
 ], components: [part({ 1: 'A', 2: 'B' })], pcb_traces: [] };
 assert(runDrc(vPad).some((i) => i.message.includes('too close to R99')), 'via vs pad clearance flagged');
+
+// Real pad geometry, not the component centre: a via between the pads is clear.
+const vBetween = { ...board, pcb_vias: [
+  { id: 'V1', net: 'GND', x: 10, y: 10, drill_mm: 0.3, pad_mm: 0.6 },
+], components: [part({ 1: 'A', 2: 'B' })], pcb_traces: [] };
+assert(!runDrc(vBetween).some((i) => i.message.includes('too close to R99')), 'via between pads is clear');
 
 // DRC: stackup layer count mismatch flagged
 const sMismatch = { ...board, project_metadata: { ...board.project_metadata, pcb_specifications: { ...board.project_metadata.pcb_specifications, layers: 2, stackup: { layers: [{ name: 'F', type: 'signal', copper_weight_oz: 1, dielectric_thickness_mm: 1.5 }, { name: 'B', type: 'signal', copper_weight_oz: 1, dielectric_thickness_mm: 1.5 }, { name: 'G', type: 'ground', copper_weight_oz: 1, dielectric_thickness_mm: 1.5 }], total_thickness_mm: 1.6 } } } };

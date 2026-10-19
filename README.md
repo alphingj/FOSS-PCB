@@ -5,16 +5,16 @@
 - `npx tsc --noEmit` clean, `npm run build` green
 - `cargo check` clean, `cargo test` 7/7 pass (router BFS, kicad parse, drc bounds)
 - Python: `python python/verify_plugins.py` exercises KiCad export + plugins
-- Executable suites: `simcheck` (18 asserts: values/MNA/switching), `routecheck`
-  (15: A*/DRC), `padcheck` (TS+Python KiCad pads), `spicecheck` (9: netlist),
-  `fabcheck` (Gerber 4.6 widths/Excellon), `repaircheck` (validator loop) — run
-  via `node scripts/prepare-checks.cjs`
+- Executable suites: `simcheck` (values/MNA/switching), `routecheck` (A*/DRC,
+  zones, vias, rip-up routing), `padcheck` (TS+Python KiCad pads), `spicecheck`
+  (netlist), `fabcheck` (Gerber 4.6/Excellon), `repaircheck` (validator loop),
+  `partgencheck` (symbol/footprint generator) — run via
+  `node scripts/prepare-checks.cjs`
 - **Real KiCad**: `python python/kicad_verify.py` exports the demo board from
   both emitters (TypeScript and Python), runs `kicad-cli pcb drc` on each and
-  asserts 0 violations plus emitter parity. Verified against KiCad 10.0.6 on
-  this machine; the script skips cleanly when KiCad is not installed, so CI
-  stays green either way. Pad geometry is read from the official KiCad
-  footprint library, not estimated.
+  asserts 0 errors plus emitter parity (warnings are reported). `python python/partgen_verify.py`
+  loads generated symbols/footprints with KiCad's `pcbnew` API and re-saves
+  them with `kicad-cli`. Both skip cleanly when KiCad is absent.
 
 ## Run
 
@@ -22,7 +22,7 @@
 npm install
 npm run dev          # web preview → http://localhost:3000 → "Load buck-boost demo"
 cargo tauri dev      # desktop shell (needs Rust stable + Node)
-cargo tauri build    # installers (msi/dmg/appimage)
+cargo tauri build    # Windows .msi / macOS .dmg
 ```
 
 Python extras (optional, for solid STEP later): `pip install -r python/requirements.txt`
@@ -46,9 +46,11 @@ builds fall back to direct browser→provider calls.
 app/                    Next.js UI + /api/chat proxy
 components/             ProviderBar, PromptBox, OutputTabs, ExportBar,
                         SchematicEditor, BoardCanvas2D, BoardViewer3D,
-                        ScopePanel, LabPanel, PluginPanel
+                        ScopePanel, LabPanel, LibraryPanel, PartGenerator,
+                        StackupEditor, DiagnosticsPanel
 lib/                    foss-schema.ts (contract), drc.ts, erc.ts, routing.ts,
-                        kicad-io.ts, tauri-bridge.ts, chat-direct.ts, sim/
+                        kicad-io.ts, kicad-pads.ts, fab.ts, partgen.ts,
+                        partgen-prompt.ts, tauri-bridge.ts, chat-direct.ts, sim/
 src-tauri/              Tauri 2 + Rust core (kicad parse, drc, router, commands)
 python/foss_pcb/        kicad_compat, footprint, step_export, sim, runner
 plugins/                bom_export, drc_report, step_export (run() entrypoint)
@@ -74,12 +76,22 @@ No secrets live in this repo — thumbprints/identities go in local config only.
 
 ## Known limits (honest)
 
-- Autorouter is coarse BFS (Manhattan, point obstacles) — manual routing is the
-  real path; DRC covers bounds/nets/heuristic zones, not full clearance.
+- Autorouter is rip-up-and-refit over a coarse BFS grid (45° simplification,
+  point obstacles) — not true geometric push-and-shove; manual routing remains
+  the precise path. DRC covers bounds, nets, trace/pad/via/zone clearances and
+  zone overlap, not every KiCad rule.
+- Copper zones export as unfilled outlines; KiCad computes the pour on load.
+  The in-app renderer shows zone bounds, not a simulated fill. The demo board
+  ships two GND vias with no traces, so KiCad reports them as dangling until
+  you route (a warning, not an error).
+- The AI part generator models dual-row (SOIC/TSSOP), inline (SIP) and SOT-23
+  packages only; quad/no-lead packages (QFP/QFN/BGA) are rejected rather than
+  guessed. Pad geometry is IPC-7351B-inspired from the supplied lead dimensions
+  and is shown as a pad table for review — not a verified land pattern. PDF
+  input requires Anthropic; other providers accept a pinout image.
 - STEP export is a manifest stub until CadQuery/PythonOCC is wired.
 - Scope/Lab run a local bench: value parsing (R/C/L strings → SI, incl. 4K7
   notation and case-sensitive M vs m), MNA DC divider check, and a CCM
   cycle-average switching model with Vf/Rds/DCR solved by bisection — no
   SPICE yet; ngspice linking is next. The SPICE export takes its duty cycle
   from that same solved operating point rather than a fixed 0.5.
-- Android later: viewer/lab only, not the full editor.

@@ -1,47 +1,41 @@
 # FOSS-PCB Build Plan — Post-LCSC Milestone
 
-**Status:** LCSC coverage complete — 35/36 library parts verified (the one exception, `CL21A106KAFNNNE`, isn't listed on LCSC; its closest variant C15850 is a different thickness and stays blank per the standing rule).
+**Status:** LCSC coverage complete — 35/36 library parts verified (`CL21A106KAFNNNE` stays blank; LCSC's C15850 is a different thickness variant). Phase 1 layout engine complete. Phase 2.1 AI part generator complete.
 
 **Goal:** Build every ProtoFlow-class capability that's realistically achievable for a desktop-first, BYOK, open-source EDA. Explicitly out of scope: live collaboration, ngspice live linking, MCU co-simulation, Linux/Android targets, signed installers, auto-updater.
 
 ---
 
-## Phase 1 — Layout Engine (make the board editor feel "real")
+## Phase 1 — Layout Engine (make the board editor feel "real") — ✅ COMPLETE
 
-### 1.1 Copper pours / zones
-**Files:** `lib/drc.ts`, `lib/routing.ts`, `components/BoardCanvas2D.tsx`, `lib/kicad-io.ts`, `python/foss_pcb/kicad_compat.py`
-**What:** Solid ground/power pours on copper layers with clearance from other nets. KiCad emits zones as `zone` s-expr with `net`, `layer`, `bounding_box`, `pad_connections`.
-**DRC:** Pour-to-trace clearance, pour-to-pad clearance (same-net = connected, different-net = clearance), thermal reliefs on through-hole pins.
-**Verification:** `routecheck.cjs` + real KiCad DRC via `python/kicad_verify.py`.
+### 1.1 Copper pours / zones ✅
+KiCad 10 zone grammar: `polygon`/`connect_pads`/`min_thickness`/`fill`/`hatch`, `(net N)` no name. DRC: bounds, trace clearance, layer-aware zone overlap.
 
-### 1.2 Vias
-**Files:** `lib/kicad-pads.ts`, `lib/kicad-io.ts`, `python/foss_pcb/kicad_compat.ts`, `components/BoardCanvas2D.tsx`
-**What:** Via stack definitions (drill size, pad sizes per layer, antipads). Through-hole vias first; blind/buried documented as future.
-**KiCad:** `via` s-expr in `.kicad_pcb`. TS and Python emitters must stay pad-for-pad identical.
-**Verification:** `padcheck.cjs` + `python/padcheck_py.py` + `kicad_verify.py`.
+### 1.2 Vias ✅
+`FossVia` schema; KiCad 10 via grammar `(net N)` no name (verified vs real demo). DRC: bounds, trace clearance, pad clearance. Rendering + 2 demo vias.
 
-### 1.3 Push-and-shove routing
-**Files:** `lib/routing.ts`, `components/BoardCanvas2D.tsx`
-**What:** Replace/augment A* point-to-point with rip-up-and-refit or true push-and-shove. Obstacle awareness (component bodies, other traces, pours).
-**Verification:** `routecheck.cjs` — A* still works, new router doesn't break existing traces.
+### 1.3 Push-and-shove routing ✅
+`tryRoute` + `ripupAutoroute` (rip-up-and-refit). Wired into BoardCanvas2D autoroute. Later nets displace earlier ones; ripped traces re-routed in a second pass.
 
-### 1.4 Stackup editor
-**Files:** `lib/foss-schema.ts` (pcb_specifications), `components/ExportBar.tsx` or new `StackupEditor.tsx`
-**What:** Layer count, copper weight, dielectric thickness, impedance hints. Stored in `project_metadata.pcb_specifications`.
-**Verification:** `tsc --noEmit`, schema round-trip.
+### 1.4 Stackup editor ✅
+`FossLayer`/`FossStackup` schema + `StackupEditor.tsx` UI (add/edit/remove layers) + stackup DRC. Wired into nav.
+
+**Key lesson:** KiCad 10's zone/via grammar differs from older versions. The `kicad_verify.py` harness (built earlier) caught the invalid `chain`/`pad_connections`/`net_name` tokens. Always validate emitters against a real KiCad, never assume the format.
 
 ---
 
 ## Phase 2 — Part Generation & Sourcing (ProtoFlow's biggest differentiator)
 
-### 2.1 AI Part Generator (datasheet → symbol + footprint)
-**Files:** New `lib/partgen.ts`, new `components/PartGenerator.tsx`, Python sidecar `python/foss_pcb/partgen.py`
-**What:** 
-- Input: part number, datasheet URL, uploaded PDF, or pinout image
-- BYOK vision model reads datasheet, extracts pinout + package + land pattern
-- Output: linked `.kicad_sym` + `.kicad_mod` (IPC-7351B), refinement loop ("tell the AI what's wrong")
-- Export to KiCad (primary), EAGLE/Altium/Allegro documented as future
-**Verification:** No automated check possible (LLM output); unit tests for the IPC-7351B geometry math. Manual verification against datasheets.
+### 2.1 AI Part Generator (datasheet → symbol + footprint) ✅
+**Files:** `lib/partgen.ts`, `lib/partgen-prompt.ts`, `components/PartGenerator.tsx`, `partgencheck.cjs`, `python/partgen_verify.py`
+**What:**
+- Input: uploaded datasheet PDF or pinout image (a URL is recorded as provenance only — the model cannot browse)
+- BYOK model extracts the pin table + package dimensions as strict JSON; missing facts are rejected rather than guessed
+- Output: linked `.kicad_sym` + `.kicad_mod`; the pad table is shown for review
+- Supported layouts: dual-row (SOIC/TSSOP), inline (SIP), SOT-23. Quad/no-lead (QFP/QFN/BGA) are rejected.
+- Pad geometry is IPC-7351B-inspired from the supplied lead dimensions — a reviewed starting point, not a verified land pattern
+- No refinement loop yet; re-run with a clearer document instead
+**Verification:** `partgencheck.cjs` (geometry, counter-clockwise numbering, courtyard, parser, quad rejection) + `python/partgen_verify.py` (pcbnew load + kicad-cli re-save for SOIC-8 and SOT-23). Real parts still need manual datasheet review.
 
 ### 2.2 Live distributor catalog
 **Files:** `lib/catalog.ts`, `components/LibraryPanel.tsx`, CLI `@protoflow/cli`-style
@@ -104,6 +98,6 @@ git commit && git push
 
 - All 6 node check suites green
 - Both Python check scripts green
-- `kicad_verify.py` shows 0 DRC violations on both emitters
+- `kicad_verify.py` shows 0 DRC errors on both emitters (warnings reported)
 - `tsc --noEmit` clean, `npm run build` green, `cargo test` 7/7
 - Committed and pushed to `https://github.com/alphingj/FOSS-PCB`

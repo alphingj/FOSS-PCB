@@ -1,6 +1,7 @@
 import type { FossPcb } from './foss-schema';
 import { segSegDist, ptSegDist, type Pt } from './routing';
 import { bodySizeForFootprint } from './models-3d';
+import { pinoutFor, rot2, soic8Pads, SOT23_PADS, twoPinGeom } from './kicad-pads';
 
 export interface DrcIssue {
   severity: 'error' | 'warning';
@@ -11,6 +12,50 @@ const DEFAULT_CLEARANCE_MM = 0.2;
 const MAX_TRACE_VIOLATIONS = 10;
 
 type Seg = { a: Pt; b: Pt };
+
+type PadAt = { n: number; x: number; y: number; net: string };
+
+/** Pad centres in board coordinates for footprints whose land pattern is
+ *  sourced (SOIC-8, SOT-23, symmetric 2-pin). Returns null when the footprint
+ *  has no modelled geometry, so callers fall back to a body-centre check. */
+function padCentres(c: FossPcb['components'][number]): PadAt[] | null {
+  const local: { n: number; dx: number; dy: number }[] = [];
+  if (c.footprint.includes('SOIC-8')) {
+    for (const pad of soic8Pads()) local.push({ n: pad.n, dx: pad.dx, dy: pad.dy });
+  } else if (c.footprint.includes('SOT-23')) {
+    for (const pad of SOT23_PADS) local.push({ n: pad.n, dx: pad.dx, dy: pad.dy });
+  } else {
+    const g2 = twoPinGeom(c.footprint);
+    if (!g2) return null;
+    local.push({ n: 1, dx: -g2.dx, dy: 0 }, { n: 2, dx: g2.dx, dy: 0 });
+  }
+
+  const labels = Object.keys(c.pins);
+  const pinout = pinoutFor(c.mpn);
+  // Symmetric 2-pin: pad 1 ← '1' (or 'A'), pad 2 ← the other label.
+  let twoPinNet: ((n: number) => string) | null = null;
+  if (!pinout && local.length === 2) {
+    const l1 = labels.includes('1') ? '1' : labels.includes('A') ? 'A' : labels[0];
+    const l2 = labels.find((l) => l !== l1);
+    twoPinNet = (n) => {
+      const label = n === 1 ? l1 : l2;
+      return label && c.pins[label] ? c.pins[label] : '';
+    };
+  }
+  const netOf = (n: number): string => {
+    if (pinout) {
+      const label = Object.keys(pinout).find((l) => pinout[l] === n && l in c.pins);
+      return label ? c.pins[label] : '';
+    }
+    return twoPinNet ? twoPinNet(n) : '';
+  };
+
+  const { x, y, rotation } = c.pcb_placement_mm;
+  return local.map((l) => {
+    const [rx, ry] = rot2(l.dx, l.dy, rotation);
+    return { n: l.n, x: x + rx, y: y + ry, net: netOf(l.n) };
+  });
+}
 
 function traceSegs(pcb: FossPcb): { net: string; id: string; segs: Seg[] }[] {
   return (pcb.pcb_traces ?? []).map((t) => ({
@@ -225,12 +270,21 @@ export function runDrc(pcb: FossPcb): DrcIssue[] {
         }
       }
     }
-    // Via vs different-net pads: pad centers of foreign nets must clear the via pad.
+    // Via vs different-net pads. Sourced footprints use real pad centres;
+    // others fall back to a conservative component-body centre check.
     for (const c of pcb.components) {
-      if (Object.values(c.pins).includes(v.net)) continue;
-      const cx = c.pcb_placement_mm.x, cy = c.pcb_placement_mm.y;
-      if (Math.hypot(cx - v.x, cy - v.y) < vr + (clearanceOf.get(v.net) ?? DEFAULT_CLEARANCE_MM)) {
-        issues.push({ severity: 'error', message: `Via "${v.id}" (${v.net}) too close to ${c.designator} (< ${(vr + need).toFixed(2)}mm)` });
+      const pads = padCentres(c);
+      if (pads) {
+        for (const pad of pads) {
+          if (!pad.net || pad.net === v.net) continue;
+          const padNeed = Math.max(need, clearanceOf.get(pad.net) ?? DEFAULT_CLEARANCE_MM);
+          if (Math.hypot(pad.x - v.x, pad.y - v.y) < vr + padNeed)
+            issues.push({ severity: 'error', message: `Via "${v.id}" (${v.net}) too close to ${c.designator} pad ${pad.n} (${pad.net}) (< ${(vr + padNeed).toFixed(2)}mm)` });
+        }
+      } else if (!Object.values(c.pins).includes(v.net)) {
+        const cx = c.pcb_placement_mm.x, cy = c.pcb_placement_mm.y;
+        if (Math.hypot(cx - v.x, cy - v.y) < vr + need)
+          issues.push({ severity: 'error', message: `Via "${v.id}" (${v.net}) too close to ${c.designator} (< ${(vr + need).toFixed(2)}mm)` });
       }
     }
   }
