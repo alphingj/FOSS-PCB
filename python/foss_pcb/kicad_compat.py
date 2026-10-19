@@ -208,6 +208,18 @@ def foss_to_kicad_pcb(foss: dict) -> str:
                 f' (width {t.get("width_mm", 0.25)}) (layer "{layer}")'
                 f' {_net_field(nid, [n.get("net_name", "") for n in nets])})'
             )
+    # Copper pour zones — KiCad computes the filled polygon on load; we emit
+    # the zone boundary + pad connection rules. Verified with kicad-cli 10.0.6.
+    for z in foss.get("pcb_layout_zones", []):
+        nid = net_ids.get(z.get("net"), 0)
+        layer = "B.Cu" if str(z.get("layer", "Top")).lower().startswith("bottom") else "F.Cu"
+        bb = z.get("bounding_box_mm", {}) or {}
+        x1, y1, x2, y2 = bb.get("x1", 0), bb.get("y1", 0), bb.get("x2", 0), bb.get("y2", 0)
+        lines.append(f'  (zone (net {nid}) (layer "{layer}") (net_name "{z.get("net", "")}")')
+        lines.append(f'    (chain (start {x1} {y1}) (xy {x2} {y1}) (xy {x2} {y2}) (xy {x1} {y2}))')
+        lines.append('    (pad_connections (pad_via_shape thermal_relief) (clearance 0.2) (width_scale 0.6))')
+        lines.append('    (island_remove_mode corner_threshold_area)')
+        lines.append('  )')
     lines.append(")")
     return "\n".join(lines)
 

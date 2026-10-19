@@ -122,7 +122,7 @@ def main():
         return (t.count("(pad "), t.count("(net "), t.count("(footprint "))
     if shape(ts_txt) != shape(py_txt):
         ok = False
-        print(f"FAIL: emitter parity TS{p.shape(ts_txt)} vs PY{shape(py_txt)}")
+        print(f"FAIL: emitter parity TS{shape(ts_txt)} vs PY{shape(py_txt)}")
     else:
         print(f"ok: emitter parity (pads, nets, footprints) = {shape(ts_txt)}")
 

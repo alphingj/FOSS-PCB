@@ -36,8 +36,12 @@ assert(u1pads.U1['7'] === 1, 'U1 pad7 VCC->VIN=1');
 assert(Object.values(u1pads.Q1).every((n) => n === 0), 'unverified Q1 pads all net 0');
 assert(s.includes('FOSS_NOTE'), 'unverified-pin note present for Q1');
 // KiCad refuses to load a board where any (net ...) lacks a quoted name —
-// verified with kicad-cli 10.0.6 ("Expecting net name").
-assert(!/\(net \d+\)/.test(s), 'every net field carries a quoted name');
+// verified with kicad-cli 10.0.6 ("Expecting net name"). Zones use the
+// separate (net_name ...) field on the same line, so (net N) alone is valid
+// there. Check line by line: either `) "name"` or `net_name` on the line.
+const netLines = s.split('\n').filter((l) => /\(net \d+\)/.test(l));
+const badNet = netLines.some((l) => !/\)\s*"/.test(l) && !/net_name/.test(l));
+assert(!badNet, 'every net field carries a quoted name');
 // Pads must be local offsets (KiCad applies the footprint rotation itself),
 // and geometry must match the official KiCad footprint library.
 assert(!/^\s+\(pad "\d+" .*\(at -?4\.9\d\d/.test(s), 'pads use local offsets, not absolute');

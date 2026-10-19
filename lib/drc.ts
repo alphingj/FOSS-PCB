@@ -168,6 +168,44 @@ export function runDrc(pcb: FossPcb): DrcIssue[] {
     }
   }
 
+  // Zone geometry: bounds and clearance to different-net copper.
+  const zones = pcb.pcb_layout_zones ?? [];
+  const clearanceOf = new Map(pcb.nets.map((n) => [n.net_name, n.clearance_mm ?? DEFAULT_CLEARANCE_MM]));
+  const allTraceSegs = traceSegs(pcb);
+  for (const z of zones) {
+    const { x1, y1, x2, y2 } = z.bounding_box_mm;
+    const need = clearanceOf.get(z.net) ?? DEFAULT_CLEARANCE_MM;
+    // Zone must be within board bounds.
+    if (x1 < 0 || y1 < 0 || x2 > W || y2 > H)
+      issues.push({ severity: 'error', message: `Zone "${z.net}" leaves board bounds (${x1},${y1})-(${x2},${y2})` });
+    // Zone clearance vs different-net traces: traces must not enter the zone
+    // bounding box shrunk by the clearance margin.
+    const padNeed = need; // pad-to-pour clearance (thermal reliefs handle pads)
+    for (const s of allTraceSegs) {
+      if (s.net === z.net) continue; // same-net copper connects freely
+      const sNeed = Math.max(need, clearanceOf.get(s.net) ?? DEFAULT_CLEARANCE_MM);
+      for (const seg of s.segs) {
+        if (segRectDist(seg.a, seg.b, {
+          x1: x1 - sNeed, y1: y1 - sNeed, x2: x2 + sNeed, y2: y2 + sNeed
+        }) < sNeed) {
+          issues.push({ severity: 'error', message: `Zone "${z.net}" too close to trace "${s.net}" (< ${sNeed.toFixed(2)}mm)` });
+          break;
+        }
+      }
+    }
+    // Zone vs zone: different-net zones on the same layer must not overlap.
+    const zLayer = z.layer.toLowerCase().startsWith('bottom') ? 'Bottom' : 'Top';
+    for (const z2 of zones) {
+      if (z2 === z || z2.net === z.net) continue;
+      const z2Layer = z2.layer.toLowerCase().startsWith('bottom') ? 'Bottom' : 'Top';
+      if (zLayer !== z2Layer) continue; // different copper layers can overlap
+      const overlap = !(x2 < z2.bounding_box_mm.x1 || x1 > z2.bounding_box_mm.x2 ||
+                        y2 < z2.bounding_box_mm.y1 || y1 > z2.bounding_box_mm.y2);
+      if (overlap)
+        issues.push({ severity: 'error', message: `Zone "${z.net}" overlaps zone "${z2.net}"` });
+    }
+  }
+
   issues.push(...traceIssues(pcb));
   return issues;
 }

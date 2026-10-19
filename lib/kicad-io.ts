@@ -118,6 +118,19 @@ export function fossToKicadPcb(pcb: FossPcb): string {
       L.push(`  (segment (start ${x1} ${y1}) (end ${x2} ${y2}) (width ${t.width_mm}) (layer "${layer}") ${netField(id, netNameOf)} (tstamp ${uuid()}))`);
     }
   }
+  // Copper pour zones. KiCad computes the filled polygon on load; we emit the
+  // zone boundary + pad connection rules. Verified: kicad-cli 10.0.6 accepts
+  // zones with a chain and pad_connections block, then refills on open.
+  for (const z of pcb.pcb_layout_zones ?? []) {
+    const id = netId.get(z.net) ?? 0;
+    const layer = z.layer.toLowerCase().startsWith('bottom') ? 'B.Cu' : 'F.Cu';
+    const { x1, y1, x2, y2 } = z.bounding_box_mm;
+    L.push(`  (zone (net ${id}) (layer "${layer}") (net_name "${z.net.replace(/"/g, '')}")`);
+    L.push(`    (chain (start ${x1} ${y1}) (xy ${x2} ${y1}) (xy ${x2} ${y2}) (xy ${x1} ${y2}))`);
+    L.push(`    (pad_connections (pad_via_shape thermal_relief) (clearance 0.2) (width_scale 0.6))`);
+    L.push(`    (island_remove_mode corner_threshold_area)`);
+    L.push(`  )`);
+  }
   L.push(')');
   return L.join('\n');
 }

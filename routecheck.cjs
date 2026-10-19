@@ -64,4 +64,34 @@ const dup = { ...board, components: [
   { designator: 'R1', type: 'Resistor', value: '10k', mpn: '', footprint: 'R_0805_2012Metric', pins: {}, schematic_pos: { x: 0, y: 0, rotation: 0 }, pcb_placement_mm: { x: 8, y: 5, rotation: 0, layer: 'Top' } },
 ] };
 assert(runDrc(dup).some((i) => i.message.includes('Duplicate designator R1')), 'duplicate designator flagged');
+
+// DRC: zone out of board bounds flagged
+const zOOB = { ...board, pcb_layout_zones: [
+  { zone_name: 'Z1', net: 'GND', layer: 'Top', bounding_box_mm: { x1: -5, y1: 0, x2: 55, y2: 10 }, rule: 'x' },
+] };
+assert(runDrc(zOOB).some((i) => i.message.includes('leaves board bounds')), 'zone out of bounds flagged');
+
+// DRC: different-net trace through zone flagged
+const zTrace = { ...board, pcb_layout_zones: [
+  { zone_name: 'Z1', net: 'GND', layer: 'Top', bounding_box_mm: { x1: 10, y1: 10, x2: 20, y2: 20 }, rule: 'x' },
+], pcb_traces: [
+  { id: 'zt', net: 'A', layer: 'Top', pts_mm: [[12, 12], [18, 18]], width_mm: 0.25 },
+] };
+assert(runDrc(zTrace).some((i) => i.message.includes('too close to trace')), 'zone vs trace clearance flagged');
+
+// DRC: same-net trace through zone is fine
+const zTraceSame = { ...board, pcb_layout_zones: [
+  { zone_name: 'Z1', net: 'GND', layer: 'Top', bounding_box_mm: { x1: 10, y1: 10, x2: 20, y2: 20 }, rule: 'x' },
+], pcb_traces: [
+  { id: 'zts', net: 'GND', layer: 'Top', pts_mm: [[12, 12], [18, 18]], width_mm: 0.25 },
+] };
+assert(!runDrc(zTraceSame).some((i) => i.message.includes('too close to trace')), 'same-net trace in zone OK');
+
+// DRC: overlapping different-net zones flagged
+const zOverlap = { ...board, pcb_layout_zones: [
+  { zone_name: 'Z1', net: 'GND', layer: 'Top', bounding_box_mm: { x1: 0, y1: 0, x2: 10, y2: 10 }, rule: 'x' },
+  { zone_name: 'Z2', net: 'A', layer: 'Top', bounding_box_mm: { x1: 5, y1: 5, x2: 15, y2: 15 }, rule: 'x' },
+] };
+assert(runDrc(zOverlap).some((i) => i.message.includes('overlaps zone')), 'zone overlap flagged');
+
 console.log('ALL ROUTE/DRC CHECKS PASSED');

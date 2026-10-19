@@ -160,7 +160,11 @@ export default function BoardCanvas2D() {
             <rect key={z.zone_name} x={z.bounding_box_mm.x1 * S} y={(H - z.bounding_box_mm.y2) * S}
               width={(z.bounding_box_mm.x2 - z.bounding_box_mm.x1) * S}
               height={(z.bounding_box_mm.y2 - z.bounding_box_mm.y1) * S}
-              fill={z.net === 'GND' ? 'rgba(0,0,0,0.35)' : 'rgba(255,200,0,0.30)'} stroke="#ff0" strokeDasharray="4 2" />
+              fill={z.net === 'GND' ? '#0d4d1f' : z.net === 'SW' ? '#b8860b' : '#1a3a5c'}
+              fillOpacity={0.25}
+              stroke={z.net === 'GND' ? '#2ecc71' : z.net === 'SW' ? '#f1c40f' : '#3498db'}
+              strokeWidth={1}
+              strokeDasharray="4 2" />
           ))}
           {traces.map((t) => (
             <polyline key={t.id} points={t.pts_mm.map(svgPt).join(' ')} fill="none"
