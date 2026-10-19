@@ -122,4 +122,16 @@ const vPad = { ...board, pcb_vias: [
 ], components: [part({ 1: 'A', 2: 'B' })], pcb_traces: [] };
 assert(runDrc(vPad).some((i) => i.message.includes('too close to R99')), 'via vs pad clearance flagged');
 
+// DRC: stackup layer count mismatch flagged
+const sMismatch = { ...board, project_metadata: { ...board.project_metadata, pcb_specifications: { ...board.project_metadata.pcb_specifications, layers: 2, stackup: { layers: [{ name: 'F', type: 'signal', copper_weight_oz: 1, dielectric_thickness_mm: 1.5 }, { name: 'B', type: 'signal', copper_weight_oz: 1, dielectric_thickness_mm: 1.5 }, { name: 'G', type: 'ground', copper_weight_oz: 1, dielectric_thickness_mm: 1.5 }], total_thickness_mm: 1.6 } } } };
+assert(runDrc(sMismatch).some((i) => i.message.includes('Stackup has 3 layers')), 'stackup layer count mismatch flagged');
+
+// DRC: zero/negative stackup thickness flagged
+const sZero = { ...board, project_metadata: { ...board.project_metadata, pcb_specifications: { ...board.project_metadata.pcb_specifications, stackup: { layers: [], total_thickness_mm: 0 } } } };
+assert(runDrc(sZero).some((i) => i.message.includes('total thickness')), 'stackup zero thickness flagged');
+
+// DRC: consistent stackup is clean
+const sOk = { ...board, project_metadata: { ...board.project_metadata, pcb_specifications: { ...board.project_metadata.pcb_specifications, layers: 2, stackup: { layers: [{ name: 'F', type: 'signal', copper_weight_oz: 1, dielectric_thickness_mm: 1.5 }, { name: 'B', type: 'signal', copper_weight_oz: 1, dielectric_thickness_mm: 1.5 }], total_thickness_mm: 1.6 } } } };
+assert(!runDrc(sOk).some((i) => i.message.includes('Stackup') || i.message.includes('thickness')), 'consistent stackup clean');
+
 console.log('ALL ROUTE/DRC CHECKS PASSED');

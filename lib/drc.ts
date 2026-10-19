@@ -234,5 +234,17 @@ export function runDrc(pcb: FossPcb): DrcIssue[] {
       }
     }
   }
+
+  // Stackup consistency: the layer stack should describe the routing layer count.
+  const spec = pcb.project_metadata.pcb_specifications;
+  const stackLayers = spec.stackup?.layers ?? [];
+  if (stackLayers.length && stackLayers.length !== spec.layers)
+    issues.push({
+      severity: 'warning',
+      message: `Stackup has ${stackLayers.length} layers but board spec says ${spec.layers} — keep them consistent`,
+    });
+  if (spec.stackup && spec.stackup.total_thickness_mm <= 0)
+    issues.push({ severity: 'error', message: 'Stackup total thickness must be positive' });
+
   return issues;
 }

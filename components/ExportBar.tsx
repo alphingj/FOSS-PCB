@@ -58,7 +58,7 @@ export default function ExportBar() {
           revision: '1.0.0',
           topology: 'imported',
           assumed_parameters: {},
-          pcb_specifications: { board_width_mm: W, board_height_mm: 80, layers: 2, copper_weight_oz: 1, surface_finish: 'HASL_Lead_Free' },
+          pcb_specifications: { board_width_mm: W, board_height_mm: 80, layers: 2, copper_weight_oz: 1, surface_finish: 'HASL_Lead_Free', stackup: { layers: [], total_thickness_mm: 1.6 } },
         },
         components: comps.map((c, i) => ({
           designator: c.designator,

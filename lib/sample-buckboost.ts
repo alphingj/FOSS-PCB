@@ -7,7 +7,10 @@ export const SAMPLE_BUCKBOOST: FossPcb = {
     revision: '1.0.0',
     topology: 'Inverting_Single_Switch_Buck_Boost',
     assumed_parameters: { vin_min_v: 5, vin_max_v: 15, vout_nominal_v: -12, iout_max_a: 1, switching_frequency_hz: 100000 },
-    pcb_specifications: { board_width_mm: 50, board_height_mm: 35, layers: 2, copper_weight_oz: 2, surface_finish: 'HASL_Lead_Free' },
+    pcb_specifications: { board_width_mm: 50, board_height_mm: 35, layers: 2, copper_weight_oz: 2, surface_finish: 'HASL_Lead_Free', stackup: { layers: [
+      { name: 'F.Cu', type: 'signal', copper_weight_oz: 2, dielectric_thickness_mm: 1.5 },
+      { name: 'B.Cu', type: 'ground', copper_weight_oz: 2, dielectric_thickness_mm: 1.5 },
+    ], total_thickness_mm: 1.6 } },
   },
   components: [
     { designator: 'J1', type: 'Connector_Terminal_2Pin', value: 'TERM_2P', mpn: 'MKDS_1_5_2', footprint: 'TerminalBlock_Phoenix_MKDS-1,5-2_5.08mm', pins: { '1': 'VIN', '2': 'GND' }, schematic_pos: { x: 100, y: 200, rotation: 0 }, pcb_placement_mm: { x: 5, y: 17.5, rotation: 90, layer: 'Top' } },

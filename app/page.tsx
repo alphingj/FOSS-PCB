@@ -8,6 +8,7 @@ import PromptBox from '../components/PromptBox';
 import OutputTabs from '../components/OutputTabs';
 import ExportBar from '../components/ExportBar';
 import BoardCanvas2D from '../components/BoardCanvas2D';
+import StackupEditor from '../components/StackupEditor';
 import SchematicEditor from '../components/SchematicEditor';
 import BoardViewer3D from '../components/BoardViewer3D';
 import LabPanel from '../components/LabPanel';
@@ -25,6 +26,7 @@ const NAV: [string, string][] = [
   ['results', 'Results'],
   ['schematic', 'Schematic'],
   ['board', 'Board'],
+  ['stackup', 'Stackup'],
   ['model', '3D Model'],
   ['lab', 'Test Lab'],
   ['library', 'Library'],
@@ -92,6 +94,12 @@ export default function Page() {
             <h3>Board layout</h3>
             <ErrorBoundary name="Board editor">
               <BoardCanvas2D />
+            </ErrorBoundary>
+          </section>
+
+          <section id="stackup">
+            <ErrorBoundary name="Stackup editor">
+              <StackupEditor />
             </ErrorBoundary>
           </section>
 

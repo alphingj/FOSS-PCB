@@ -41,6 +41,20 @@ export const FossZone = z.object({
   rule: z.string().default(''),
 });
 
+/** One layer of the board stackup. `signal` routes traces; `ground`/`power`
+ *  are typically pours; `mixed` carries both. */
+export const FossLayer = z.object({
+  name: z.string(),
+  type: z.enum(['signal', 'ground', 'power', 'mixed']).default('signal'),
+  copper_weight_oz: z.number().default(1),
+  dielectric_thickness_mm: z.number().default(1.5),
+});
+
+export const FossStackup = z.object({
+  layers: z.array(FossLayer).default([]),
+  total_thickness_mm: z.number().default(1.6),
+});
+
 export const FossTrace = z.object({
   id: z.string(),
   net: z.string(),
@@ -74,6 +88,7 @@ export const FossPcbJson = z.object({
       layers: z.number().default(2),
       copper_weight_oz: z.number().default(1),
       surface_finish: z.string().default('HASL_Lead_Free'),
+      stackup: FossStackup.default({ layers: [], total_thickness_mm: 1.6 }),
     }),
   }),
   components: z.array(FossComponent),
