@@ -19,6 +19,9 @@ interface Store {
   setProjectName: (s: string) => void;
   dirty: boolean;
   markSaved: () => void;
+  /** MPN handed from the library/catalog panel to the AI Part Generator. */
+  partgenSeed: string;
+  setPartgenSeed: (s: string) => void;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -37,6 +40,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [projectId, setProjectId] = useState('local-default');
   const [projectName, setProjectName] = useState('Untitled board');
   const [dirty, setDirty] = useState(false);
+  const [partgenSeed, setPartgenSeed] = useState('');
 
   const setPcb = (p: FossPcb | null) => {
     setPcbState(p);
@@ -60,7 +64,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <Ctx.Provider value={{ provider, setProvider, rawText, setRawText, pcb: pcbState, setPcb, error, setError, projectId, setProjectId, projectName, setProjectName, dirty, markSaved }}>
+    <Ctx.Provider value={{ provider, setProvider, rawText, setRawText, pcb: pcbState, setPcb, error, setError, projectId, setProjectId, projectName, setProjectName, dirty, markSaved, partgenSeed, setPartgenSeed }}>
       {children}
     </Ctx.Provider>
   );

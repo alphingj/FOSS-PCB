@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useStore } from '../lib/store';
 import { chatDirect, type ChatAttachment } from '../lib/chat-direct';
 import { generateKicadFootprint, generateKicadSymbol, padTable, type PartSpec } from '../lib/partgen';
@@ -31,7 +31,7 @@ async function readAttachment(file: File): Promise<ChatAttachment> {
 // PDF, or image), extracts the pinout and package geometry, and emits a linked
 // KiCad .kicad_sym + .kicad_mod. The user reviews the pad table before use.
 export default function PartGenerator() {
-  const { provider } = useStore();
+  const { provider, partgenSeed } = useStore();
   const [mpn, setMpn] = useState('NE555DR');
   const [source, setSource] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -40,6 +40,12 @@ export default function PartGenerator() {
   const [spec, setSpec] = useState<PartSpec | null>(null);
   const [sym, setSym] = useState('');
   const [mod, setMod] = useState('');
+
+  // A distributor/library part handed over by LibraryPanel — prefill the MPN so
+  // the user only has to attach its datasheet.
+  useEffect(() => {
+    if (partgenSeed) setMpn(partgenSeed);
+  }, [partgenSeed]);
 
   const generate = async () => {
     setBusy(true); setError(''); setSpec(null);

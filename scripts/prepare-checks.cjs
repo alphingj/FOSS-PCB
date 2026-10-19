@@ -9,7 +9,7 @@ if (!src || !outDir || !outFile) {
   process.exit(2);
 }
 let c = fs.readFileSync(src, 'utf8');
-for (const ph of ['SIMDIR', 'ROUTEDIR', 'PDIR', 'SDIR', 'RDIR', 'FDIR', 'LDIR', 'VDIR', 'PGDIR']) {
+for (const ph of ['SIMDIR', 'ROUTEDIR', 'PDIR', 'SDIR', 'RDIR', 'FDIR', 'LDIR', 'VDIR', 'PGDIR', 'CATDIR']) {
   c = c.split(ph).join(outDir);
 }
 fs.writeFileSync(outFile, c);

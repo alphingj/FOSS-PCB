@@ -8,7 +8,8 @@
 - Executable suites: `simcheck` (values/MNA/switching), `routecheck` (A*/DRC,
   zones, vias, rip-up routing), `padcheck` (TS+Python KiCad pads), `spicecheck`
   (netlist), `fabcheck` (Gerber 4.6/Excellon), `repaircheck` (validator loop),
-  `partgencheck` (symbol/footprint generator) — run via
+  `partgencheck` (symbol/footprint generator), `catalogcheck` (DigiKey/Mouser
+  request shapes, normalisation and error surfacing) — run via
   `node scripts/prepare-checks.cjs`
 - **Real KiCad**: `python python/kicad_verify.py` exports the demo board from
   both emitters (TypeScript and Python), runs `kicad-cli pcb drc` on each and
@@ -40,10 +41,21 @@ Top bar: OpenRouter / Anthropic / Custom (baseUrl + key + model text or fetched
 list). `/api/chat` proxies in dev (SSRF-guarded, 90s timeout); static/Tauri
 builds fall back to direct browser→provider calls.
 
+## Sourcing (BYOK distributor search)
+
+The library panel's live search talks to **DigiKey** (Product Information v4,
+OAuth2 client credentials) and **Mouser** (Search API v1) with keys you paste in
+the panel — stored in this browser only, never sent anywhere but to the
+distributor. In the desktop app requests go straight out through the Tauri HTTP
+plugin (hosts allowlisted); in `npm run dev` they go through `/api/catalog`.
+LCSC has no public product API, so it is offered as search/C-number links.
+Results are ordering data: `Add` is enabled only for MPNs in the verified
+library, and anything else is handed to the Part Generator with its datasheet.
+
 ## Layout
 
 ```
-app/                    Next.js UI + /api/chat proxy
+app/                    Next.js UI + /api/chat + /api/catalog proxies
 components/             ProviderBar, PromptBox, OutputTabs, ExportBar,
                         SchematicEditor, BoardCanvas2D, BoardViewer3D,
                         ScopePanel, LabPanel, LibraryPanel, PartGenerator,
@@ -89,6 +101,14 @@ No secrets live in this repo — thumbprints/identities go in local config only.
   guessed. Pad geometry is IPC-7351B-inspired from the supplied lead dimensions
   and is shown as a pad table for review — not a verified land pattern. PDF
   input requires Anthropic; other providers accept a pinout image.
+- Live distributor search covers DigiKey (Product Information v4) and Mouser
+  (Search API v1) with your own API credentials, one page of up to 50 results
+  and no result caching. It has been verified up to the distributors' own
+  credential errors; a successful live search needs your key. LCSC publishes no
+  public product API, so LCSC is offered as search/C-number links rather than
+  invented results, and live rows can only be added to the board when their MPN
+  matches the verified library — otherwise send them to the Part Generator with
+  a datasheet. Prices/packages come from the distributor; footprint names never do.
 - STEP export is a manifest stub until CadQuery/PythonOCC is wired.
 - Scope/Lab run a local bench: value parsing (R/C/L strings → SI, incl. 4K7
   notation and case-sensitive M vs m), MNA DC divider check, and a CCM
