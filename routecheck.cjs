@@ -94,4 +94,32 @@ const zOverlap = { ...board, pcb_layout_zones: [
 ] };
 assert(runDrc(zOverlap).some((i) => i.message.includes('overlaps zone')), 'zone overlap flagged');
 
+// DRC: via out of board bounds flagged
+const vOOB = { ...board, pcb_vias: [
+  { id: 'V9', net: 'GND', x: 60, y: 5, drill_mm: 0.3, pad_mm: 0.6 },
+] };
+assert(runDrc(vOOB).some((i) => i.message.includes('leaves board bounds')), 'via out of bounds flagged');
+
+// DRC: via too close to a different-net trace flagged
+const vTrace = { ...board, pcb_vias: [
+  { id: 'V1', net: 'GND', x: 15, y: 10, drill_mm: 0.3, pad_mm: 0.6 },
+], pcb_traces: [
+  { id: 'vt', net: 'A', layer: 'Top', pts_mm: [[14, 10], [16, 10]], width_mm: 0.25 },
+] };
+assert(runDrc(vTrace).some((i) => i.message.includes('too close to trace')), 'via vs trace clearance flagged');
+
+// DRC: same-net trace passing through via is fine
+const vTraceSame = { ...board, pcb_vias: [
+  { id: 'V1', net: 'GND', x: 15, y: 10, drill_mm: 0.3, pad_mm: 0.6 },
+], pcb_traces: [
+  { id: 'vts', net: 'GND', layer: 'Top', pts_mm: [[14, 10], [16, 10]], width_mm: 0.25 },
+] };
+assert(!runDrc(vTraceSame).some((i) => i.message.includes('too close to trace')), 'same-net trace at via OK');
+
+// DRC: via too close to a different-net pad flagged
+const vPad = { ...board, pcb_vias: [
+  { id: 'V1', net: 'GND', x: 10, y: 10, drill_mm: 0.3, pad_mm: 0.6 },
+], components: [part({ 1: 'A', 2: 'B' })], pcb_traces: [] };
+assert(runDrc(vPad).some((i) => i.message.includes('too close to R99')), 'via vs pad clearance flagged');
+
 console.log('ALL ROUTE/DRC CHECKS PASSED');

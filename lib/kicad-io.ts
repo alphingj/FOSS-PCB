@@ -131,6 +131,12 @@ export function fossToKicadPcb(pcb: FossPcb): string {
     L.push(`    (island_remove_mode corner_threshold_area)`);
     L.push(`  )`);
   }
+  // Vias: plated through-hole. `layers` names the span ("F.Cu-B.Cu" through).
+  // KiCad requires a quoted net name in the (net ...) field here too.
+  for (const v of pcb.pcb_vias ?? []) {
+    const id = netId.get(v.net) ?? 0;
+    L.push(`  (via (at ${v.x} ${v.y}) (size ${v.pad_mm}) (drill ${v.drill_mm}) (layers "F.Cu" "B.Cu") ${netField(id, netNameOf)} (tstamp ${uuid()}))`);
+  }
   L.push(')');
   return L.join('\n');
 }

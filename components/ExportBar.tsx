@@ -79,6 +79,7 @@ export default function ExportBar() {
         schematic_wires: [],
         pcb_traces: [],
         pcb_layout_zones: [],
+        pcb_vias: [],
       });
       setError('');
     } catch (e: any) {

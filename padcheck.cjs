@@ -49,6 +49,14 @@ assert(s.includes('(size 1.95 0.6)'), 'SOIC-8 pads 1.95x0.6 (KiCad library)');
 assert(s.includes('(size 2.5 1.8)'), 'D_SMA pads 2.5x1.8 (KiCad library)');
 assert(s.includes('(size 1.025 1.4)'), '0805 pads 1.025x1.4 (KiCad library)');
 assert(s.includes('(layer "Edge.Cuts")'), 'board outline present on Edge.Cuts');
+// Zones: demo board has SW (Top) and GND (Bottom) pours — KiCad requires the
+// separate (net_name ...) field for zone nets.
+assert((s.match(/\(zone /g) ?? []).length === 2, '2 copper pour zones exported', (s.match(/\(zone /g) ?? []).length);
+assert(s.includes('(net_name "SW")') && s.includes('(net_name "GND")'), 'zone net_name fields present');
+assert(s.includes('(pad_connections'), 'zone thermal relief rules present');
+// Vias: demo board has 2 through vias.
+assert((s.match(/\(via /g) ?? []).length === 2, '2 vias exported', (s.match(/\(via /g) ?? []).length);
+assert(s.includes('(via (at 22 8) (size 0.6) (drill 0.3)'), 'via V1 geometry', s.match(/\(via [^\n]*/)?.[0]);
 
 // 2-pin passives: R(3x2) + D(1x2) = 8 pads; C (CP_Elec) and L (SRR1280) stay
 // pad-less (land patterns not yet datasheet-sourced) — total 16 + 8 = 24.

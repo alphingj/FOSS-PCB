@@ -49,6 +49,19 @@ export const FossTrace = z.object({
   width_mm: z.number().default(0.25),
 });
 
+/** A plated through-hole via: drill hole + pad on outer layers.
+ *  layers names the span ("F.Cu-B.Cu" is a through via; a blind/buried via
+ *  would name an inner span, but inner layers are not modelled yet). */
+export const FossVia = z.object({
+  id: z.string(),
+  net: z.string(),
+  x: z.number(),
+  y: z.number(),
+  drill_mm: z.number().default(0.3),
+  pad_mm: z.number().default(0.6),
+  layers: z.string().default('F.Cu-B.Cu'),
+});
+
 export const FossPcbJson = z.object({
   project_metadata: z.object({
     design_name: z.string(),
@@ -68,6 +81,7 @@ export const FossPcbJson = z.object({
   schematic_wires: z.array(FossWire).default([]),
   pcb_traces: z.array(FossTrace).default([]),
   pcb_layout_zones: z.array(FossZone).default([]),
+  pcb_vias: z.array(FossVia).default([]),
 });
 
 export type FossPcb = z.infer<typeof FossPcbJson>;

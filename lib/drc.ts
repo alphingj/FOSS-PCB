@@ -1,5 +1,5 @@
 import type { FossPcb } from './foss-schema';
-import { segSegDist, type Pt } from './routing';
+import { segSegDist, ptSegDist, type Pt } from './routing';
 import { bodySizeForFootprint } from './models-3d';
 
 export interface DrcIssue {
@@ -207,5 +207,32 @@ export function runDrc(pcb: FossPcb): DrcIssue[] {
   }
 
   issues.push(...traceIssues(pcb));
+
+  // Via geometry: bounds, and clearance to different-net traces/pads.
+  for (const v of pcb.pcb_vias ?? []) {
+    const need = clearanceOf.get(v.net) ?? DEFAULT_CLEARANCE_MM;
+    const vr = (v.pad_mm || 0.6) / 2;
+    if (v.x < 0 || v.y < 0 || v.x > W || v.y > H)
+      issues.push({ severity: 'error', message: `Via "${v.id}" (${v.net}) leaves board bounds (${v.x},${v.y})` });
+    // Via vs different-net traces: trace must not pass within pad radius + clearance.
+    for (const s of allTraceSegs) {
+      if (s.net === v.net) continue;
+      const sNeed = Math.max(need, clearanceOf.get(s.net) ?? DEFAULT_CLEARANCE_MM);
+      for (const seg of s.segs) {
+        if (ptSegDist({ x: v.x, y: v.y }, seg.a, seg.b) < vr + sNeed) {
+          issues.push({ severity: 'error', message: `Via "${v.id}" (${v.net}) too close to trace "${s.net}" (< ${(vr + sNeed).toFixed(2)}mm)` });
+          break;
+        }
+      }
+    }
+    // Via vs different-net pads: pad centers of foreign nets must clear the via pad.
+    for (const c of pcb.components) {
+      if (Object.values(c.pins).includes(v.net)) continue;
+      const cx = c.pcb_placement_mm.x, cy = c.pcb_placement_mm.y;
+      if (Math.hypot(cx - v.x, cy - v.y) < vr + (clearanceOf.get(v.net) ?? DEFAULT_CLEARANCE_MM)) {
+        issues.push({ severity: 'error', message: `Via "${v.id}" (${v.net}) too close to ${c.designator} (< ${(vr + need).toFixed(2)}mm)` });
+      }
+    }
+  }
   return issues;
 }

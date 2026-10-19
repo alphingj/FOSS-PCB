@@ -176,6 +176,12 @@ export default function BoardCanvas2D() {
           {pending.length > 0 && (
             <polyline points={pending.map(svgPt).join(' ')} fill="none" stroke="#00d4ff" strokeWidth={2} strokeDasharray="5 3" />
           )}
+          {(pcb.pcb_vias ?? []).map((v) => (
+            <circle key={v.id} cx={v.x * S} cy={(H - v.y) * S} r={Math.max(2, v.pad_mm * S / 2)}
+              fill="#c9a227" stroke="#fff" strokeWidth={1}>
+              <title>{`via ${v.net} (${v.drill_mm}mm drill)`}</title>
+            </circle>
+          ))}
           {pcb.components.map((c) => (
             <g key={c.designator}
               transform={`translate(${c.pcb_placement_mm.x * S},${(H - c.pcb_placement_mm.y) * S})`}

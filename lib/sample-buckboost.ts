@@ -37,6 +37,10 @@ export const SAMPLE_BUCKBOOST: FossPcb = {
     { zone_name: 'SW_Copper_Polygon', net: 'SW', layer: 'Top', bounding_box_mm: { x1: 19, y1: 14, x2: 36, y2: 26 }, rule: 'Keep small and wide.' },
     { zone_name: 'Bottom_Ground_Plane', net: 'GND', layer: 'Bottom', bounding_box_mm: { x1: 1, y1: 1, x2: 49, y2: 34 }, rule: 'Continuous pour.' },
   ],
+  pcb_vias: [
+    { id: 'V1', net: 'GND', x: 22, y: 8, drill_mm: 0.3, pad_mm: 0.6, layers: 'F.Cu-B.Cu' },
+    { id: 'V2', net: 'GND', x: 30, y: 12, drill_mm: 0.3, pad_mm: 0.6, layers: 'F.Cu-B.Cu' },
+  ],
 };
 
 export const SAMPLE_MARKDOWN = `## Components List (BOM)\nDemo buck-boost loaded. See BOM tab.\n## Connection List\nSee Netlist tab.\n## Full JSON Format\nDemo JSON loaded into builder.`;

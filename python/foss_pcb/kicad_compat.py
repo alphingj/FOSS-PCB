@@ -220,6 +220,14 @@ def foss_to_kicad_pcb(foss: dict) -> str:
         lines.append('    (pad_connections (pad_via_shape thermal_relief) (clearance 0.2) (width_scale 0.6))')
         lines.append('    (island_remove_mode corner_threshold_area)')
         lines.append('  )')
+    # Vias: plated through-hole. KiCad requires a quoted net name here too.
+    for v in foss.get("pcb_vias", []):
+        nid = net_ids.get(v.get("net"), 0)
+        lines.append(
+            f'  (via (at {v.get("x", 0)} {v.get("y", 0)}) (size {v.get("pad_mm", 0.6)})'
+            f' (drill {v.get("drill_mm", 0.3)}) (layers "F.Cu" "B.Cu")'
+            f' {_net_field(nid, [n.get("net_name", "") for n in nets])} (tstamp {uuid4()}))'
+        )
     lines.append(")")
     return "\n".join(lines)
 
