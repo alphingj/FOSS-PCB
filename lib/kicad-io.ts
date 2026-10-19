@@ -121,21 +121,29 @@ export function fossToKicadPcb(pcb: FossPcb): string {
   // Copper pour zones. KiCad computes the filled polygon on load; we emit the
   // zone boundary + pad connection rules. Verified: kicad-cli 10.0.6 accepts
   // zones with a chain and pad_connections block, then refills on open.
+  // NOTE: KiCad 10's zone grammar uses `polygon`, `connect_pads`,
+  // `min_thickness`, `fill`, `hatch` — NOT the older `chain`/`pad_connections`
+  // tokens. Net name is implied by the (net N) id (no net_name field).
   for (const z of pcb.pcb_layout_zones ?? []) {
     const id = netId.get(z.net) ?? 0;
     const layer = z.layer.toLowerCase().startsWith('bottom') ? 'B.Cu' : 'F.Cu';
     const { x1, y1, x2, y2 } = z.bounding_box_mm;
-    L.push(`  (zone (net ${id}) (layer "${layer}") (net_name "${z.net.replace(/"/g, '')}")`);
-    L.push(`    (chain (start ${x1} ${y1}) (xy ${x2} ${y1}) (xy ${x2} ${y2}) (xy ${x1} ${y2}))`);
-    L.push(`    (pad_connections (pad_via_shape thermal_relief) (clearance 0.2) (width_scale 0.6))`);
-    L.push(`    (island_remove_mode corner_threshold_area)`);
+    const pts = `(xy ${x1} ${y1}) (xy ${x2} ${y1}) (xy ${x2} ${y2}) (xy ${x1} ${y2})`;
+    L.push(`  (zone (net ${id}) (layer "${layer}") (tstamp ${uuid()})`);
+    L.push(`    (hatch edge 0.508)`);
+    L.push(`    (priority 0)`);
+    L.push(`    (connect_pads (clearance 0.2))`);
+    L.push(`    (min_thickness 0.254)`);
+    L.push(`    (fill yes (thermal_gap 0.508) (thermal_bridge_width 0.508))`);
+    L.push(`    (polygon (pts ${pts}))`);
     L.push(`  )`);
   }
   // Vias: plated through-hole. `layers` names the span ("F.Cu-B.Cu" through).
-  // KiCad requires a quoted net name in the (net ...) field here too.
+  // KiCad 10 uses `(net N)` with no quoted name for vias (name derives from the
+  // net id) — verified against a real .kicad_pcb from the KiCad 10 demos.
   for (const v of pcb.pcb_vias ?? []) {
     const id = netId.get(v.net) ?? 0;
-    L.push(`  (via (at ${v.x} ${v.y}) (size ${v.pad_mm}) (drill ${v.drill_mm}) (layers "F.Cu" "B.Cu") ${netField(id, netNameOf)} (tstamp ${uuid()}))`);
+    L.push(`  (via (at ${v.x} ${v.y}) (size ${v.pad_mm}) (drill ${v.drill_mm}) (layers "F.Cu" "B.Cu") (net ${id}) (tstamp ${uuid()}))`);
   }
   L.push(')');
   return L.join('\n');

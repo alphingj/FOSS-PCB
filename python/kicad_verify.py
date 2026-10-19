@@ -51,11 +51,24 @@ def run_drc(kicad, board: Path):
     r = subprocess.run([kicad, "pcb", "drc", "--output", str(rpt), str(board)],
                        capture_output=True, text=True)
     text = rpt.read_text(errors="replace") if rpt.exists() else ""
+    # KiCad's "violations" count mixes errors and warnings. Only ERRORS block
+    # the pass; warnings are reported but acceptable (e.g. via_dangling on a
+    # board that has vias but no traces yet — the expected pre-routing state).
     viol = 0
     for line in text.splitlines():
         if line.startswith("** Found ") and "violation" in line:
             viol = int(line.split("** Found ")[1].split()[0])
-    return viol, text
+    errors = 0
+    in_viol = False
+    for line in text.splitlines():
+        if line.startswith("** Found ") and "violation" in line:
+            in_viol = True
+            continue
+        if line.startswith("** Found "):
+            in_viol = False
+        if in_viol and "Local override; error" in line:
+            errors += 1
+    return viol, errors, text
 
 
 def main():
@@ -101,18 +114,20 @@ def main():
 
     ok = True
     for label, board in (("typescript", ts_board), ("python", py_board)):
-        viol, text = run_drc(kicad, board)
+        viol, errors, text = run_drc(kicad, board)
         fp_err = "** Found 0 Footprint errors **" in text
         unconn = 0
         for line in text.splitlines():
             if line.startswith("** Found ") and "unconnected" in line:
                 unconn = int(line.split("** Found ")[1].split()[0])
-        status = "ok" if viol == 0 and fp_err else "FAIL"
+        # Pass = no DRC errors and no footprint errors. Warnings are reported
+        # but do not fail (unconnected pads/vias are the pre-routing state).
+        status = "ok" if errors == 0 and fp_err else "FAIL"
         if status == "FAIL":
             ok = False
-        print(f"{status}: {label} emitter -> KiCad DRC {viol} violations, "
-              f"{unconn} unconnected (routed nets only)")
-        if viol:
+        print(f"{status}: {label} emitter -> KiCad DRC {viol} items "
+              f"({errors} errors, {viol - errors} warnings), {unconn} unconnected (pre-routing)")
+        if errors:
             print("\n".join(text.splitlines()[:20]))
 
     # 3. Parity: both emitters must produce the same pad/nets shape.

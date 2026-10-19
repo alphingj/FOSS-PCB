@@ -35,13 +35,18 @@ assert(u1pads.U1['6'] === 5, 'U1 pad6 OUT->GATE_DRV=5');
 assert(u1pads.U1['7'] === 1, 'U1 pad7 VCC->VIN=1');
 assert(Object.values(u1pads.Q1).every((n) => n === 0), 'unverified Q1 pads all net 0');
 assert(s.includes('FOSS_NOTE'), 'unverified-pin note present for Q1');
-// KiCad refuses to load a board where any (net ...) lacks a quoted name —
-// verified with kicad-cli 10.0.6 ("Expecting net name"). Zones use the
-// separate (net_name ...) field on the same line, so (net N) alone is valid
-// there. Check line by line: either `) "name"` or `net_name` on the line.
+// KiCad's (net ...) grammar differs by object: pads and segments carry a
+// quoted name `(net N "name")`; vias and zones carry `(net N)` with the name
+// derived from the net id. Verified with kicad-cli 10.0.6 against a real
+// .kicad_pcb from the KiCad 10 demos.
 const netLines = s.split('\n').filter((l) => /\(net \d+\)/.test(l));
-const badNet = netLines.some((l) => !/\)\s*"/.test(l) && !/net_name/.test(l));
-assert(!badNet, 'every net field carries a quoted name');
+const badNet = netLines.some((l) => {
+  if (/\)\s*"/.test(l)) return false;   // quoted name present
+  if (/\(zone /.test(l)) return false;  // zone: (net N) only, name by id
+  if (/\(via /.test(l)) return false;   // via: (net N) only, name by id
+  return true;
+});
+assert(!badNet, 'every net field carries a name (pads/segments) or uses a via/zone form');
 // Pads must be local offsets (KiCad applies the footprint rotation itself),
 // and geometry must match the official KiCad footprint library.
 assert(!/^\s+\(pad "\d+" .*\(at -?4\.9\d\d/.test(s), 'pads use local offsets, not absolute');
@@ -49,11 +54,13 @@ assert(s.includes('(size 1.95 0.6)'), 'SOIC-8 pads 1.95x0.6 (KiCad library)');
 assert(s.includes('(size 2.5 1.8)'), 'D_SMA pads 2.5x1.8 (KiCad library)');
 assert(s.includes('(size 1.025 1.4)'), '0805 pads 1.025x1.4 (KiCad library)');
 assert(s.includes('(layer "Edge.Cuts")'), 'board outline present on Edge.Cuts');
-// Zones: demo board has SW (Top) and GND (Bottom) pours — KiCad requires the
-// separate (net_name ...) field for zone nets.
+// Zones: demo board has SW (Top) and GND (Bottom) pours — KiCad 10 uses the
+// `polygon`/`connect_pads`/`min_thickness`/`fill`/`hatch` zone grammar.
 assert((s.match(/\(zone /g) ?? []).length === 2, '2 copper pour zones exported', (s.match(/\(zone /g) ?? []).length);
-assert(s.includes('(net_name "SW")') && s.includes('(net_name "GND")'), 'zone net_name fields present');
-assert(s.includes('(pad_connections'), 'zone thermal relief rules present');
+assert(s.includes('(zone (net 2) (layer "F.Cu")') && s.includes('(zone (net 4) (layer "B.Cu")'), 'zone net+layer fields present');
+assert(s.includes('(polygon (pts (xy 19 14)') && s.includes('(polygon (pts (xy 1 1)'), 'zone polygon outlines present');
+assert(s.includes('(connect_pads (clearance 0.2))'), 'zone thermal relief rules present');
+assert(s.includes('(fill yes (thermal_gap 0.508)'), 'zone fill rules present');
 // Vias: demo board has 2 through vias.
 assert((s.match(/\(via /g) ?? []).length === 2, '2 vias exported', (s.match(/\(via /g) ?? []).length);
 assert(s.includes('(via (at 22 8) (size 0.6) (drill 0.3)'), 'via V1 geometry', s.match(/\(via [^\n]*/)?.[0]);

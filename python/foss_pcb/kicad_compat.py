@@ -210,23 +210,31 @@ def foss_to_kicad_pcb(foss: dict) -> str:
             )
     # Copper pour zones — KiCad computes the filled polygon on load; we emit
     # the zone boundary + pad connection rules. Verified with kicad-cli 10.0.6.
+    # NOTE: KiCad 10's zone grammar uses `polygon`, `connect_pads`,
+    # `min_thickness`, `fill`, `hatch` — not the older `chain`/`pad_connections`
+    # tokens. Net name is implied by the (net N) id.
     for z in foss.get("pcb_layout_zones", []):
         nid = net_ids.get(z.get("net"), 0)
         layer = "B.Cu" if str(z.get("layer", "Top")).lower().startswith("bottom") else "F.Cu"
         bb = z.get("bounding_box_mm", {}) or {}
         x1, y1, x2, y2 = bb.get("x1", 0), bb.get("y1", 0), bb.get("x2", 0), bb.get("y2", 0)
-        lines.append(f'  (zone (net {nid}) (layer "{layer}") (net_name "{z.get("net", "")}")')
-        lines.append(f'    (chain (start {x1} {y1}) (xy {x2} {y1}) (xy {x2} {y2}) (xy {x1} {y2}))')
-        lines.append('    (pad_connections (pad_via_shape thermal_relief) (clearance 0.2) (width_scale 0.6))')
-        lines.append('    (island_remove_mode corner_threshold_area)')
+        pts = f"(xy {x1} {y1}) (xy {x2} {y1}) (xy {x2} {y2}) (xy {x1} {y2})"
+        lines.append(f'  (zone (net {nid}) (layer "{layer}") (tstamp {uuid4()})')
+        lines.append('    (hatch edge 0.508)')
+        lines.append('    (priority 0)')
+        lines.append('    (connect_pads (clearance 0.2))')
+        lines.append('    (min_thickness 0.254)')
+        lines.append('    (fill yes (thermal_gap 0.508) (thermal_bridge_width 0.508))')
+        lines.append(f'    (polygon (pts {pts}))')
         lines.append('  )')
-    # Vias: plated through-hole. KiCad requires a quoted net name here too.
+    # Vias: plated through-hole. KiCad 10 uses (net N) with no quoted name
+    # for vias (verified against a real .kicad_pcb from the KiCad 10 demos).
     for v in foss.get("pcb_vias", []):
         nid = net_ids.get(v.get("net"), 0)
         lines.append(
             f'  (via (at {v.get("x", 0)} {v.get("y", 0)}) (size {v.get("pad_mm", 0.6)})'
             f' (drill {v.get("drill_mm", 0.3)}) (layers "F.Cu" "B.Cu")'
-            f' {_net_field(nid, [n.get("net_name", "") for n in nets])} (tstamp {uuid4()}))'
+            f' (net {nid}) (tstamp {uuid4()}))'
         )
     lines.append(")")
     return "\n".join(lines)

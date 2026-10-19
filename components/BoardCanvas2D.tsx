@@ -2,7 +2,7 @@
 import { useRef, useState } from 'react';
 import { useStore } from '../lib/store';
 import { runDrc } from '../lib/drc';
-import { bfsRoute, simplify } from '../lib/routing';
+import { ripupAutoroute, type Pt } from '../lib/routing';
 import { bodySizeForFootprint } from '../lib/models-3d';
 import { seg, btnPlain, muted } from '../lib/theme';
 
@@ -103,25 +103,28 @@ export default function BoardCanvas2D() {
     });
   };
 
-  /** Route each signal net between the first two distinct owning components. */
+  /** Route every signal net with rip-up-and-refit: each net routes around the
+   *  traces already placed; if blocked, the blocking traces are ripped up and
+   *  re-routed in a second pass. Later nets can displace earlier ones. */
   const autoroute = () => {
     const byDes = new Map(pcb.components.map((c) => [c.designator, c]));
-    const blocked = pcb.components.map((c) => ({ x: c.pcb_placement_mm.x, y: c.pcb_placement_mm.y }));
-    const traces = [...(pcb.pcb_traces ?? [])];
+    const staticBlocked = pcb.components.map((c) => ({ x: c.pcb_placement_mm.x, y: c.pcb_placement_mm.y }));
+    const owners = new Map<string, [Pt, Pt]>();
     for (const n of pcb.nets.filter((x) => x.net_name !== 'GND')) {
-      const owners = Array.from(new Set(n.nodes.map((nd) => nd.split('.')[0]).filter((d) => byDes.has(d))));
-      if (owners.length < 2) continue;
-      const a = byDes.get(owners[0])!.pcb_placement_mm;
-      const b = byDes.get(owners[1])!.pcb_placement_mm;
-      const from = { x: Math.min(a.x + 2, W), y: a.y };
-      const to = { x: Math.max(b.x - 2, 0), y: b.y };
-      const pts = simplify(bfsRoute(W, H, from, to, blocked)).map((p) => [p.x, p.y] as [number, number]);
-      const clean = dedupe(pts);
-      if (clean.length < 2) continue;
-      idSeq.current += 1;
-      traces.push({ id: `auto-${n.net_name}-${idSeq.current}`, net: n.net_name, layer: 'Top' as const, pts_mm: clean, width_mm: n.trace_width_mm });
+      const own = Array.from(new Set(n.nodes.map((nd) => nd.split('.')[0]).filter((d) => byDes.has(d))));
+      if (own.length < 2) continue;
+      const a = byDes.get(own[0])!.pcb_placement_mm;
+      const b = byDes.get(own[1])!.pcb_placement_mm;
+      owners.set(n.net_name, [
+        { x: Math.min(a.x + 2, W), y: a.y },
+        { x: Math.max(b.x - 2, 0), y: b.y },
+      ]);
     }
-    setPcb({ ...pcb, pcb_traces: traces });
+    const r = ripupAutoroute(W, H, pcb.nets, owners, staticBlocked);
+    setPcb({
+      ...pcb,
+      pcb_traces: r.traces.map((t) => ({ ...t, layer: 'Top' as const })),
+    });
   };
 
   const traces = pcb.pcb_traces ?? [];

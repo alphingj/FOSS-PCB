@@ -1,4 +1,4 @@
-const { bfsRoute, simplify, segSegDist } = require('ROUTEDIR/routing.js');
+const { bfsRoute, simplify, segSegDist, tryRoute, ripupAutoroute } = require('ROUTEDIR/routing.js');
 const { runDrc } = require('ROUTEDIR/drc.js');
 
 const assert = (c, m, v) => { if (!c) { console.error('FAIL: ' + m, v ?? ''); process.exit(1); } else console.log('ok: ' + m); };
@@ -133,5 +133,30 @@ assert(runDrc(sZero).some((i) => i.message.includes('total thickness')), 'stacku
 // DRC: consistent stackup is clean
 const sOk = { ...board, project_metadata: { ...board.project_metadata, pcb_specifications: { ...board.project_metadata.pcb_specifications, layers: 2, stackup: { layers: [{ name: 'F', type: 'signal', copper_weight_oz: 1, dielectric_thickness_mm: 1.5 }, { name: 'B', type: 'signal', copper_weight_oz: 1, dielectric_thickness_mm: 1.5 }], total_thickness_mm: 1.6 } } } };
 assert(!runDrc(sOk).some((i) => i.message.includes('Stackup') || i.message.includes('thickness')), 'consistent stackup clean');
+
+// Push-and-shove: tryRoute returns null when a wall blocks every path.
+const wall = [];
+for (let y = 0; y <= 35; y++) wall.push({ x: 25, y });
+assert(tryRoute(50, 35, { x: 5, y: 10 }, { x: 45, y: 10 }, wall) === null, 'tryRoute null on fully blocked path');
+assert(tryRoute(50, 35, { x: 5, y: 10 }, { x: 10, y: 10 }, []) !== null, 'tryRoute finds open path');
+
+// Push-and-shove: ripupAutoroute connects every net, even when the first net
+// blocks the second's straight line. The second net rips it up and re-routes.
+const owners = new Map([
+  ['A', [{ x: 5, y: 10 }, { x: 45, y: 10 }]],
+  ['B', [{ x: 10, y: 20 }, { x: 40, y: 20 }]],
+]);
+const rr = ripupAutoroute(50, 35, [{ net_name: 'A', trace_width_mm: 0.25 }, { net_name: 'B', trace_width_mm: 0.25 }], owners, []);
+assert(rr.routed === 2, 'ripupAutoroute connects both nets', JSON.stringify(rr));
+assert(rr.traces.some((t) => t.net === 'A') && rr.traces.some((t) => t.net === 'B'), 'both nets present after ripup');
+
+// Push-and-shove: two nets whose straight lines cross force a rip-up.
+const owners2 = new Map([
+  ['A', [{ x: 5, y: 10 }, { x: 45, y: 10 }]],
+  ['B', [{ x: 25, y: 5 }, { x: 25, y: 30 }]],
+]);
+const rr2 = ripupAutoroute(50, 35, [{ net_name: 'A', trace_width_mm: 0.25 }, { net_name: 'B', trace_width_mm: 0.25 }], owners2, []);
+assert(rr2.routed === 2, 'crossing nets both routed', JSON.stringify(rr2));
+assert(rr2.traces.every((t) => t.pts_mm.length >= 2), 'all routed traces have geometry');
 
 console.log('ALL ROUTE/DRC CHECKS PASSED');
