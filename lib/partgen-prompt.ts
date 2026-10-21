@@ -56,6 +56,78 @@ export function partgenRequest(partNumber: string, source: string): { system: st
   };
 }
 
+export const PARTGEN_REFINE_SYSTEM = `You are correcting a component-library extraction for FOSS-PCB.
+You receive the previous extraction (strict JSON) and reviewer feedback, plus the original datasheet (PDF or image).
+
+Return the COMPLETE corrected JSON in exactly the same shape as the previous extraction — no prose, no markdown fences.
+
+Rules:
+- Apply ONLY corrections supported by the attached datasheet and the reviewer feedback.
+- Keep every value that is not being corrected exactly as it was.
+- Never invent a pin, a dimension or an electrical type. If the datasheet does not support a requested change, keep the previous value (or omit the field) rather than guessing.
+- Keep pin numbers and names from the datasheet pin table; do not reorder pins.
+- If the feedback asks for a quad-row or no-lead package (QFP/QFN/BGA/LGA/DFN/WLCSP), return {"error": "unsupported package: quad/no-lead"}.
+- If the feedback conflicts with the datasheet, the datasheet wins; keep the documented value.
+
+Output ONLY the corrected JSON object.`;
+
+/** Build the refinement request. `previous` is included verbatim so the model
+ *  edits rather than re-extracts, and `feedback` states what was wrong. */
+export function partgenRefineRequest(
+  partNumber: string,
+  source: string,
+  previous: PartSpec,
+  feedback: string,
+): { system: string; user: string } {
+  return {
+    system: PARTGEN_REFINE_SYSTEM,
+    user: [
+      `Part number: ${partNumber}`,
+      `Datasheet source: ${source} (reference only — you cannot fetch URLs)`,
+      'Previous extraction:',
+      JSON.stringify(previous, null, 2),
+      'Reviewer feedback (correct these points):',
+      feedback.trim(),
+      'Return the complete corrected JSON, re-checking the attached datasheet.',
+    ].join('\n'),
+  };
+}
+
+const PKG_FIELDS = [
+  'name', 'layout', 'rows', 'pinsPerRow', 'pitch', 'rowSpan',
+  'bodyWidth', 'bodyLength', 'leadWidth', 'leadLength',
+] as const;
+
+/** Field-level summary of a refinement, for review before/after applying it.
+ *  Pure and deterministic so the UI and checks agree. */
+export function diffPartSpecs(before: PartSpec, after: PartSpec): string[] {
+  const out: string[] = [];
+  const show = (v: unknown) => (v === '' || v === undefined || v === null ? '—' : String(v));
+  if (before.mpn !== after.mpn) out.push(`MPN: ${show(before.mpn)} → ${show(after.mpn)}`);
+  if ((before.description ?? '') !== (after.description ?? ''))
+    out.push(`Description: ${show(before.description)} → ${show(after.description)}`);
+
+  const oldPins = new Map(before.pins.map((p) => [p.number, p]));
+  const newPins = new Map(after.pins.map((p) => [p.number, p]));
+  for (const [n, p] of oldPins) if (!newPins.has(n)) out.push(`Removed pin ${n} (${p.name})`);
+  for (const [n, p] of newPins) {
+    const prev = oldPins.get(n);
+    if (!prev) {
+      out.push(`Added pin ${n} (${p.name})`);
+      continue;
+    }
+    if (prev.name !== p.name) out.push(`Pin ${n} name: ${prev.name} → ${p.name}`);
+    if (prev.type !== p.type) out.push(`Pin ${n} type: ${prev.type} → ${p.type}`);
+  }
+
+  for (const k of PKG_FIELDS) {
+    const a = (before.pkg as unknown as Record<string, unknown>)[k];
+    const b = (after.pkg as unknown as Record<string, unknown>)[k];
+    if (a !== b) out.push(`Package ${k}: ${show(a)} → ${show(b)}`);
+  }
+  return out;
+}
+
 /** Parse the LLM's JSON reply into a PartSpec, tolerating fenced blocks and
  *  minor shape issues. Returns null when the reply is unusable. */
 export function parsePartSpec(raw: string): PartSpec | null {

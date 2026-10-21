@@ -1,5 +1,5 @@
 const { generateKicadSymbol, generateKicadFootprint, landPads, padTable } = require('PGDIR/partgen.js');
-const { parsePartSpec } = require('PGDIR/partgen-prompt.js');
+const { parsePartSpec, diffPartSpecs, partgenRefineRequest } = require('PGDIR/partgen-prompt.js');
 
 const assert = (c, m, v) => { if (!c) { console.error('FAIL: ' + m, v ?? ''); process.exit(1); } else console.log('ok: ' + m); };
 const balanced = (s, label) => {
@@ -120,5 +120,31 @@ const errSpec = parsePartSpec('{"error": "not a datasheet"}');
 assert(errSpec === null, 'reject error reply');
 const noPins = parsePartSpec('{"mpn": "X", "pkg": {}}');
 assert(noPins === null, 'reject missing pins');
+
+// --- Refinement loop: field-level diff + grounded prompt shape ---
+const before = JSON.parse(JSON.stringify(soic8));
+const after = JSON.parse(JSON.stringify(soic8));
+after.pins[3].name = 'GND';
+after.pins[3].type = 'power_in';
+after.pins.push({ number: 9, name: 'EP', type: 'passive' });
+after.pkg.pitch = 1.27; // unchanged
+after.pkg.bodyWidth = 3.9; // unchanged
+const delta = diffPartSpecs(before, after);
+assert(delta.some((d) => d.includes('Pin 4 name')), 'diff reports a renamed pin', delta);
+assert(delta.some((d) => d.includes('Pin 4 type')), 'diff reports a changed pin type');
+assert(delta.some((d) => d.includes('Added pin 9')), 'diff reports an added pin');
+assert(!delta.some((d) => d.includes('pitch')), 'diff ignores unchanged fields');
+assert(diffPartSpecs(before, JSON.parse(JSON.stringify(before))).length === 0, 'identical specs produce no diff');
+
+const removed = JSON.parse(JSON.stringify(before));
+removed.pins.pop();
+assert(diffPartSpecs(before, removed).some((d) => d.includes('Removed pin')), 'diff reports a removed pin');
+
+const refine = partgenRefineRequest('UC3843BD1', 'datasheet.pdf', before, ' pin 4 is GND ');
+assert(refine.user.includes(JSON.stringify(before, null, 2)), 'refine request embeds the previous spec');
+assert(refine.user.includes('pin 4 is GND'), 'refine request embeds trimmed feedback');
+assert(refine.system.includes('COMPLETE corrected JSON'), 'refine system asks for a complete spec');
+assert(refine.system.includes('Never invent'), 'refine system keeps the no-guessing rule');
+assert(refine.system.includes('datasheet wins'), 'refine system resolves feedback/datasheet conflicts');
 
 console.log('ALL PARTGEN CHECKS PASSED');

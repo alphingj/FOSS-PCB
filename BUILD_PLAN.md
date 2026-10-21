@@ -34,8 +34,8 @@ KiCad 10 zone grammar: `polygon`/`connect_pads`/`min_thickness`/`fill`/`hatch`, 
 - Output: linked `.kicad_sym` + `.kicad_mod`; the pad table is shown for review
 - Supported layouts: dual-row (SOIC/TSSOP), inline (SIP), SOT-23. Quad/no-lead (QFP/QFN/BGA) are rejected.
 - Pad geometry is IPC-7351B-inspired from the supplied lead dimensions — a reviewed starting point, not a verified land pattern
-- No refinement loop yet; re-run with a clearer document instead
-**Verification:** `partgencheck.cjs` (geometry, counter-clockwise numbering, courtyard, parser, quad rejection) + `python/partgen_verify.py` (pcbnew load + kicad-cli re-save for SOIC-8 and SOT-23). Real parts still need manual datasheet review.
+- Refinement loop: attach the datasheet, state what is wrong, and the model returns a complete corrected spec; a field-level diff is shown before you keep it, with one-click revert. Unsupported requests are ignored (datasheet wins)
+**Verification:** `partgencheck.cjs` (geometry, counter-clockwise numbering, courtyard, parser, quad rejection, refinement diff + prompt grounding) + `python/partgen_verify.py` (pcbnew load + kicad-cli re-save for SOIC-8 and SOT-23). Real parts still need manual datasheet review.
 
 ### 2.2 Live distributor catalog ✅
 **Files:** `lib/catalog.ts`, `app/api/catalog/route.ts`, `components/LibraryPanel.tsx`, `catalogcheck.cjs`
