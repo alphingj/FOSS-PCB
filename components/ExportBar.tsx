@@ -11,6 +11,7 @@ const STUB_MARKER = 'foss-json follows';
 export default function ExportBar() {
   const { pcb, setPcb, setError } = useStore();
   const [busy, setBusy] = useState(false);
+  const [stepNote, setStepNote] = useState('');
   if (!pcb) return null;
   const name = pcb.project_metadata.design_name.replace(/[^\w.-]+/g, '_');
 
@@ -48,7 +49,7 @@ export default function ExportBar() {
         setError('STEP exporter returned no data.');
         return;
       }
-      let parsed: { error?: string; step?: string } | null = null;
+      let parsed: { error?: string; step?: string; models?: { used: number; missing?: { designator: string; reason: string }[] } } | null = null;
       try {
         parsed = JSON.parse(raw);
       } catch {
@@ -61,6 +62,12 @@ export default function ExportBar() {
       if (typeof parsed?.step !== 'string' || !parsed.step.startsWith('ISO-10303-21')) {
         setError('STEP exporter returned data that is not a STEP file.');
         return;
+      }
+      const m = parsed.models;
+      if (m) {
+        const bodies = `${m.used} official KiCad 3D bod${m.used === 1 ? 'y' : 'ies'}`;
+        const gaps = (m.missing ?? []).map((x) => x.designator).filter(Boolean);
+        setStepNote(`STEP includes ${bodies}${gaps.length ? `; no official model for ${gaps.join(', ')}` : ''}.`);
       }
       download(`${name}.step`, parsed.step, 'application/step');
     } catch (e) {
@@ -128,6 +135,7 @@ export default function ExportBar() {
         Import .kicad_pcb
         <input type="file" accept=".kicad_pcb" hidden onChange={(e) => { if (e.target.files?.[0]) void doImport(e.target.files[0]); e.target.value = ''; }} />
       </label>
+      {stepNote && <span role="status" style={muted}>{stepNote}</span>}
     </div>
   );
 }

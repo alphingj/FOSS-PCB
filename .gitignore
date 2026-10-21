@@ -23,3 +23,7 @@ cli/dist/
 
 # MCP build output
 mcp/dist/
+
+# Generated: OpenCASCADE WASM kernel (copied by scripts/copy-occt-wasm.cjs)
+public/occt-import-js.wasm
+

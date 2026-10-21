@@ -156,7 +156,17 @@ def _q(v) -> str:
     return str(v if v is not None else "").replace('"', "")
 
 
-def foss_to_kicad_pcb(foss: dict) -> str:
+def _model_path(path: str) -> str:
+    """KiCad accepts an absolute model path; use forward slashes so a Windows
+    export is readable on the other platforms that open the STEP/board."""
+    return _q(str(path).replace("\\", "/"))
+
+
+def foss_to_kicad_pcb(foss: dict, models: dict = None) -> str:
+    """Serialise a FOSS board. `models` maps designator -> absolute STEP path;
+    those footprints get a `(model ...)` reference so KiCad's STEP exporter
+    includes the real official 3D body."""
+    models = models or {}
     lines = ["(kicad_pcb (version 20240101) (generator foss-pcb)"]
     nets = foss.get("nets", [])
     net_ids = {}
@@ -187,6 +197,12 @@ def foss_to_kicad_pcb(foss: dict) -> str:
             [n.get("net_name", "") for n in nets], float(p.get("rotation", 0)),
             c.get("pins", {}) or {},
         ))
+        model = models.get(c.get("designator", ""))
+        if model:
+            lines.append(
+                f'    (model "{_model_path(model)}" (offset (xyz 0 0 0))'
+                f' (scale (xyz 1 1 1)) (rotate (xyz 0 0 0)))'
+            )
         lines.append("  )")
     # Board outline on Edge.Cuts — without it KiCad DRC reports a malformed
     # outline. Verified with kicad-cli 10.0.6.
@@ -256,4 +272,9 @@ def read_stdin_json() -> dict:
 
 if __name__ == "__main__":
     if "--to-kicad" in sys.argv:
-        print(foss_to_kicad_pcb(read_stdin_json()))
+        board = read_stdin_json()
+        try:
+            from .models3d import cached_model_paths
+        except ImportError:
+            from foss_pcb.models3d import cached_model_paths
+        print(foss_to_kicad_pcb(board, cached_model_paths(board)))

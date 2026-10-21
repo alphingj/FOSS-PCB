@@ -1,5 +1,5 @@
 'use client';
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { FossPcb } from './foss-schema';
 import type { ProviderConfig } from './providers';
 import { PRESETS } from './providers';
@@ -29,11 +29,22 @@ const Ctx = createContext<Store | null>(null);
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [provider, setProviderState] = useState<ProviderConfig>({
     kind: 'openrouter',
-    apiKey: typeof window !== 'undefined' ? localStorage.getItem('foss-key') ?? '' : '',
+    apiKey: '',
     baseUrl: PRESETS.openrouter.baseUrl,
     model: PRESETS.openrouter.model,
     extraHeaders: {},
   });
+  // Read the saved key after hydration. Doing this in the initial state made
+  // the client render differ from the server HTML (React hydration errors).
+  useEffect(() => {
+    let saved = '';
+    try {
+      saved = localStorage.getItem('foss-key') ?? '';
+    } catch {
+      /* private mode */
+    }
+    if (saved) setProviderState((p) => ({ ...p, apiKey: saved }));
+  }, []);
   const [rawText, setRawText] = useState('');
   const [pcbState, setPcbState] = useState<FossPcb | null>(null);
   const [error, setError] = useState('');

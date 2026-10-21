@@ -66,8 +66,20 @@ def export_step(foss: dict) -> str:
     except ImportError:  # direct script execution
         from foss_pcb.kicad_compat import foss_to_kicad_pcb
 
+    # Resolve official KiCad 3D bodies (downloaded once, then cached). Any
+    # failure is reported and the export continues without that body.
+    models = {"enabled": False, "paths": {}, "resolved": [], "missing": []}
     try:
-        pcb_text = foss_to_kicad_pcb(foss)
+        from .models3d import ensure_models
+    except ImportError:
+        from foss_pcb.models3d import ensure_models
+    try:
+        models = ensure_models(foss, enabled=os.environ.get("FOSS_3D", "1") != "0")
+    except Exception as exc:  # never block the board on a model problem
+        models["warning"] = f"3D models unavailable: {exc}"
+
+    try:
+        pcb_text = foss_to_kicad_pcb(foss, models.get("paths", {}))
     except Exception as exc:  # malformed board data
         return json.dumps({"error": f"Could not serialise the board for STEP: {exc}"})
 
@@ -104,6 +116,14 @@ def export_step(foss: dict) -> str:
         "file": f"{safe}.step",
         "bytes": len(text),
         "step": text,
+        "models": {
+            "enabled": models.get("enabled", False),
+            "used": len(models.get("paths", {})),
+            "resolved": models.get("resolved", []),
+            "missing": models.get("missing", []),
+            "cache": models.get("cache"),
+            "warning": models.get("warning"),
+        },
     })
 
 
