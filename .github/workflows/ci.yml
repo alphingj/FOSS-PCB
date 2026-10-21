@@ -33,6 +33,8 @@ jobs:
       - run: node repaircheck-run.cjs
       - run: node partgencheck-run.cjs
       - run: node catalogcheck-run.cjs
+      - run: npm run cli:build
+      - run: node clicheck.cjs
 
   rust:
     runs-on: windows-latest

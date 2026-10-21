@@ -1,0 +1,11 @@
+{
+  "name": "foss-pcb-cli",
+  "version": "0.1.0",
+  "description": "Search parts, run DRC and export KiCad from a FOSS-PCB .foss.json board",
+  "private": true,
+  "bin": { "foss-pcb": "dist/cli/cli.js" },
+  "files": ["dist"],
+  "engines": { "node": ">=20" },
+  "dependencies": { "zod": "^3.23.0" },
+  "license": "MIT"
+}

@@ -10,7 +10,7 @@
   (netlist), `fabcheck` (Gerber 4.6/Excellon), `repaircheck` (validator loop),
   `partgencheck` (symbol/footprint generator), `catalogcheck` (DigiKey/Mouser
   request shapes, normalisation and error surfacing) — run via
-  `node scripts/prepare-checks.cjs`
+  `node scripts/prepare-checks.cjs`; `clicheck` covers the CLI (build first)
 - **Real KiCad**: `python python/kicad_verify.py` exports the demo board from
   both emitters (TypeScript and Python), runs `kicad-cli pcb drc` on each and
   asserts 0 errors plus emitter parity (warnings are reported). `python python/partgen_verify.py`
@@ -27,6 +27,25 @@ cargo tauri build    # Windows .msi / macOS .dmg
 ```
 
 Python extras (optional, for solid STEP later): `pip install -r python/requirements.txt`
+
+## CLI
+
+```
+npm run cli:build
+npm link ./cli          # optional: gives a global `foss-pcb` command
+
+foss-pcb search 10k [--json] [--limit 20]
+foss-pcb search NE555DR --live --provider mouser     # MOUSER_API_KEY=…
+foss-pcb search NE555DR --live --provider digikey    # DIGIKEY_CLIENT_ID / DIGIKEY_CLIENT_SECRET
+foss-pcb drc board.foss.json [--json]                # exit 1 on DRC errors
+foss-pcb export-kicad board.foss.json [--out board.kicad_pcb] [--stdout]
+foss-pcb demo --out demo.foss.json
+```
+
+The CLI is built from the same TypeScript libraries as the app. It is not
+published to npm yet, so `npx foss-pcb-cli` will not work until a release is
+published; use `npm link ./cli`. `drc` reads `.foss.json` — for a `.kicad_pcb`
+use KiCad's own `kicad-cli pcb drc`.
 
 ## Flow
 
@@ -109,6 +128,9 @@ No secrets live in this repo — thumbprints/identities go in local config only.
   invented results, and live rows can only be added to the board when their MPN
   matches the verified library — otherwise send them to the Part Generator with
   a datasheet. Prices/packages come from the distributor; footprint names never do.
+- The CLI is not published yet, and its `drc` takes `.foss.json` (use
+  `kicad-cli pcb drc` for a `.kicad_pcb`). Live CLI search reads keys from the
+  environment and has the same verified-vs-unverified limits as the app panel.
 - STEP export is a manifest stub until CadQuery/PythonOCC is wired.
 - Scope/Lab run a local bench: value parsing (R/C/L strings → SI, incl. 4K7
   notation and case-sensitive M vs m), MNA DC divider check, and a CCM

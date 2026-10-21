@@ -17,3 +17,6 @@ __pycache__/
 python/.venv/
 # OS
 Thumbs.db
+
+# CLI build output
+cli/dist/

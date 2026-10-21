@@ -1,6 +1,6 @@
 # FOSS-PCB Build Plan — Post-LCSC Milestone
 
-**Status:** LCSC coverage complete — 35/36 library parts verified (`CL21A106KAFNNNE` stays blank; LCSC's C15850 is a different thickness variant). Phase 1 layout engine complete. Phase 2.1 AI part generator complete. Phase 2.2 live distributor catalog complete (DigiKey v4 + Mouser v1 search; LCSC via links, no public API).
+**Status:** LCSC coverage complete — 35/36 library parts verified (`CL21A106KAFNNNE` stays blank; LCSC's C15850 is a different thickness variant). Phase 1 layout engine complete. Phase 2.1 AI part generator complete. Phase 2.2 live distributor catalog complete (DigiKey v4 + Mouser v1 search; LCSC via links, no public API). Phase 3.1 CLI complete (build from source; npm publish still pending).
 
 **Goal:** Build every ProtoFlow-class capability that's realistically achievable for a desktop-first, BYOK, open-source EDA. Explicitly out of scope: live collaboration, ngspice live linking, MCU co-simulation, Linux/Android targets, signed installers, auto-updater.
 
@@ -53,10 +53,21 @@ KiCad 10 zone grammar: `polygon`/`connect_pads`/`min_thickness`/`fill`/`hatch`, 
 
 ## Phase 3 — Extensibility & Integration
 
-### 3.1 CLI (`npx -y foss-pcb-cli`)
-**Files:** New `cli/` directory, Tauri sidecar or standalone Node binary
-**What:** `auth login/whoami/logout`, `search <query> [--json]`, `export-kicad <foss.json>`, `drc <kicad_pcb>`. Zero dependencies, Node 20+, JSON output.
-**Verification:** CLI smoke test in CI (runs `drc` on a sample board).
+### 3.1 CLI ✅
+**Files:** `cli/cli.ts`, `cli/tsconfig.json`, `cli/package.json`, `clicheck.cjs`
+**What:**
+- `npm run cli:build` compiles the CLI against the app's own libraries (schema validation, DRC, KiCad export, catalog, library) so behaviour cannot drift; `npm link ./cli` gives a local `foss-pcb` binary
+- `search <query> [--json] [--limit N]` — offline curated library, matching MPN / value / footprint / role / LCSC code
+- `search <query> --live --provider mouser|digikey` — live distributor search using `MOUSER_API_KEY` or `DIGIKEY_CLIENT_ID`/`DIGIKEY_CLIENT_SECRET` from the environment (keys never go through argv)
+- `drc <board.foss.json> [--json]` — full app DRC; exit 1 on errors, 0 when clean/warnings-only, 2 on usage/invalid input
+- `export-kicad <board.foss.json> [--out file] [--stdout]` — same emitter as the app; output loads in KiCad 10
+- `demo [--out file]` — writes the demo buck-boost as a `.foss.json` project (also the CI fixture)
+- No CLI-only dependencies (Node 20+; `zod` comes from the app); JSON output on every query command
+**Deviations (honest):**
+- No `auth login/whoami/logout`: FOSS-PCB has no accounts. Distributor credentials are read from the environment instead.
+- `drc` reads `.foss.json`; a `.kicad_pcb` needs KiCad's own `kicad-cli pcb drc` (the Rust parser is not exposed as a binary).
+- The package is **not published** — `npx -y foss-pcb-cli` requires an npm publish/token (release task). Until then: `npm run cli:build && npm link ./cli`.
+**Verification:** `clicheck.cjs` (26 assertions: exit codes, JSON/human output, LCSC honesty, missing-key messages, off-board DRC failure, KiCad export, invalid input). The exported demo was loaded by real `kicad-cli pcb drc`: 0 errors, the 2 known demo-via warnings, 7 unconnected (unrouted).
 
 ### 3.2 MCP Interface
 **Files:** New `mcp/` directory
@@ -93,6 +104,7 @@ cargo check               # Rust clean
 cargo test                # 7/7 Rust tests
 node scripts/prepare-checks.cjs simcheck.cjs ./check-out simcheck-run.cjs   # (repeat for routecheck, padcheck, spicecheck, fabcheck, repaircheck, partgencheck, catalogcheck)
 node simcheck-run.cjs     # (repeat for all 8)
+node clicheck.cjs         # after: npm run cli:build
 python python/padcheck_py.py
 python python/verify_plugins.py
 python python/kicad_verify.py   # Real KiCad 10.0.6 DRC on both emitters
@@ -104,7 +116,7 @@ git commit && git push
 
 ## Definition of Done
 
-- All 8 node check suites green
+- All 8 mocked check suites + the CLI suite (`clicheck.cjs`) green
 - All 4 Python check scripts green
 - `kicad_verify.py` shows 0 DRC errors on both emitters (warnings reported)
 - `tsc --noEmit` clean, `npm run build` green, `cargo test` 7/7
