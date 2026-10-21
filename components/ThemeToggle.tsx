@@ -18,6 +18,8 @@ export default function ThemeToggle() {
     <button
       type="button"
       onClick={flip}
+      aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+      aria-pressed={theme === 'light'}
       title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
       style={{
         background: 'var(--input)',
@@ -30,7 +32,7 @@ export default function ThemeToggle() {
         lineHeight: 1,
       }}
     >
-      {theme === 'dark' ? '☀' : '☾'}
+      <span aria-hidden="true">{theme === 'dark' ? '☀' : '☾'}</span>
     </button>
   );
 }

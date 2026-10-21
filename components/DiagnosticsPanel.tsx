@@ -51,12 +51,12 @@ export default function DiagnosticsPanel() {
       <h3>Diagnostics</h3>
       <div style={muted}>Exercises every desktop command with canned inputs.</div>
       <div style={{ margin: '10px 0' }}>
-        <button type="button" onClick={() => void run()} disabled={busy} style={btnGhost}>
+        <button type="button" onClick={() => void run()} disabled={busy} aria-busy={busy} style={btnGhost}>
           {busy ? 'Running…' : 'Run all checks'}
         </button>
       </div>
       {rows.length > 0 && (
-        <ul style={{ ...mono, listStyle: 'none', padding: 0, margin: 0 }}>
+        <ul role="status" aria-live="polite" style={{ ...mono, listStyle: 'none', padding: 0, margin: 0 }}>
           {rows.map((r) => (
             <li key={r.name} style={{ padding: '4px 0', color: r.ok == null ? 'var(--text-2)' : r.ok ? 'var(--success)' : 'var(--danger)' }}>
               {r.ok == null ? '…' : r.ok ? '✓' : '✗'} {r.name} ({r.ms}ms) — {r.detail}

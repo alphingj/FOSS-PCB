@@ -20,7 +20,7 @@ export default class ErrorBoundary extends React.Component<
   render() {
     if (this.state.error) {
       return (
-        <div style={{ padding: 12, background: 'var(--danger-soft)', border: '1px solid var(--danger)', color: 'var(--danger)', borderRadius: 8, fontSize: 13 }}>
+        <div role="alert" style={{ padding: 12, background: 'var(--danger-soft)', border: '1px solid var(--danger)', color: 'var(--danger)', borderRadius: 8, fontSize: 13 }}>
           {this.props.name} crashed: {this.state.error}
           <button
             type="button"

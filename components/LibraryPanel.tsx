@@ -326,7 +326,7 @@ export default function LibraryPanel() {
           {provider === 'digikey' && <span>Or open <a href={digikeySearchUrl('NE555')} target="_blank" rel="noreferrer" style={link}>DigiKey search</a>.</span>}
         </div>
 
-        {liveError && <div style={errBox}>{liveError}</div>}
+        {liveError && <div role="alert" style={errBox}>{liveError}</div>}
 
         {liveResult && (
           <div>

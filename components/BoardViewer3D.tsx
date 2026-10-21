@@ -34,7 +34,7 @@ export default function BoardViewer3D() {
   return (
     <div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-        <button type="button" onClick={() => setMoveMode((m) => !m)} style={seg(moveMode)}>
+        <button type="button" aria-pressed={moveMode} onClick={() => setMoveMode((m) => !m)} style={seg(moveMode)}>
           {moveMode ? 'Moving parts' : 'Move parts'}
         </button>
         <span style={{ fontSize: 12.5, color: 'var(--text-3)', alignSelf: 'center' }}>Drag to orbit when off. Moves sync to 2D.</span>

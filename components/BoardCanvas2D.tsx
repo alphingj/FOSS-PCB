@@ -116,8 +116,8 @@ export default function BoardCanvas2D() {
   return (
     <div>
       <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center', background: 'var(--bg-soft)', padding: 6, borderRadius: 980, width: 'fit-content', maxWidth: '100%' }}>
-        <button type="button" onClick={() => { setMode('select'); setPending([]); }} style={seg(mode === 'select')}>Select</button>
-        <button type="button" onClick={() => setMode('route')} style={seg(mode === 'route')}>Route</button>
+        <button type="button" aria-pressed={mode === 'select'} onClick={() => { setMode('select'); setPending([]); }} style={seg(mode === 'select')}>Select</button>
+        <button type="button" aria-pressed={mode === 'route'} onClick={() => setMode('route')} style={seg(mode === 'route')}>Route</button>
         <select aria-label="Net" value={net} onChange={(e) => setNetSel(e.target.value)} style={{ background: 'transparent', color: 'var(--text)', border: 0, fontSize: 13, fontWeight: 600, outline: 'none' }}>
           {pcb.nets.map((n) => <option key={n.net_name} value={n.net_name}>{n.net_name}</option>)}
         </select>
@@ -129,6 +129,8 @@ export default function BoardCanvas2D() {
       </div>
       <svg
         ref={svgRef}
+        role="img"
+        aria-label={`Board layout: ${pcb.project_metadata?.design_name ?? 'design'} — ${pcb.components.length} parts, ${traces.length} traces`}
         width={W * S + 40} height={H * S + 40}
         style={{ background: '#0d4d1f', borderRadius: 8, cursor: mode === 'route' ? 'crosshair' : 'default', maxWidth: '100%', height: 'auto' }}
         onPointerUp={endDrag}

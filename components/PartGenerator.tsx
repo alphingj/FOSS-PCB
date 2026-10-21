@@ -142,7 +142,7 @@ export default function PartGenerator() {
         </button>
       </div>
 
-      {error && <div style={{ background: 'var(--danger-soft)', color: 'var(--danger)', padding: '10px 14px', borderRadius: 10, marginBottom: 12, fontSize: 13 }}>{error}</div>}
+      {error && <div role="alert" style={{ background: 'var(--danger-soft)', color: 'var(--danger)', padding: '10px 14px', borderRadius: 10, marginBottom: 12, fontSize: 13 }}>{error}</div>}
 
       {spec && (
         <>

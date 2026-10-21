@@ -8,7 +8,7 @@ export default function OutputTabs() {
   return (
     <div style={card}>
       <h3>Results</h3>
-      {error && <div style={{ background: 'var(--danger-soft)', color: 'var(--danger)', padding: '10px 14px', borderRadius: 10, marginBottom: 12, fontSize: 13 }}>{error}</div>}
+      {error && <div role="alert" style={{ background: 'var(--danger-soft)', color: 'var(--danger)', padding: '10px 14px', borderRadius: 10, marginBottom: 12, fontSize: 13 }}>{error}</div>}
       <div className="foss-grid-2">
         <div>
           <div style={sectionLabel}>AI response</div>

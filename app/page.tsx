@@ -48,6 +48,7 @@ const toolbar: React.CSSProperties = {
 export default function Page() {
   return (
     <StoreProvider>
+      <a className="skip-link" href="#main">Skip to content</a>
       <header style={toolbar}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 18px', maxWidth: 1280, margin: '0 auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexShrink: 0 }}>
@@ -66,7 +67,7 @@ export default function Page() {
       <PythonBanner />
 
       <div style={{ display: 'flex', gap: 20, maxWidth: 1280, margin: '0 auto', padding: '20px 18px 60px', alignItems: 'flex-start' }}>
-        <nav className="foss-sidebar" style={{ position: 'sticky', top: 132, width: 150, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <nav className="foss-sidebar" aria-label="Sections" style={{ position: 'sticky', top: 132, width: 150, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
           {NAV.map(([id, label]) => (
             <a key={id} href={`#${id}`} style={{ padding: '7px 12px', borderRadius: 9, fontSize: 13, fontWeight: 500, color: 'var(--text-2)', textDecoration: 'none' }}>
               {label}
@@ -74,7 +75,7 @@ export default function Page() {
           ))}
         </nav>
 
-        <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <main id="main" tabIndex={-1} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14, outline: 'none' }}>
           <section id="prompt" style={{ ...card, padding: 20 }}>
             <PromptBox />
           </section>
