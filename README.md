@@ -152,13 +152,17 @@ No secrets live in this repo — thumbprints/identities go in local config only.
   and is shown as a pad table for review — not a verified land pattern. PDF
   input requires Anthropic; other providers accept a pinout image.
 - Live distributor search covers DigiKey (Product Information v4) and Mouser
-  (Search API v1) with your own API credentials, one page of up to 50 results
-  and no result caching. It has been verified up to the distributors' own
-  credential errors; a successful live search needs your key. LCSC publishes no
+  (Search API v1) with your own API credentials, paged 25 at a time with a
+  **Load more** button, and reuses a successful search for five minutes (per
+  credential and page, in memory only — errors and your keys are never cached).
+  It has been verified up to the distributors' own credential errors; a
+  successful live search needs your key. LCSC publishes no
   public product API, so LCSC is offered as search/C-number links rather than
   invented results, and live rows can only be added to the board when their MPN
   matches the verified library — otherwise send them to the Part Generator with
   a datasheet. Prices/packages come from the distributor; footprint names never do.
+  Catalog keys default to session storage ("Remember on this device" opt-in to
+  localStorage) and go straight to the distributor in the desktop app.
 - The CLI is not published yet, and its `drc` takes `.foss.json` (use
   `kicad-cli pcb drc` for a `.kicad_pcb`). Live CLI search reads keys from the
   environment and has the same verified-vs-unverified limits as the app panel.

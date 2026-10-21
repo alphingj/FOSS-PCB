@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { CatalogError, runCatalogSearch, type CatalogCredentials, type CatalogProvider } from '../../../lib/catalog';
+import { CatalogError, cachedCatalogSearch, type CatalogCredentials, type CatalogProvider } from '../../../lib/catalog';
 
 // Web/dev transport for the live distributor catalog. The desktop app talks to
 // the distributors directly (Tauri HTTP plugin) so keys never leave the machine;
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid credentials.' }, { status: 400 });
 
   try {
-    const result = await runCatalogSearch(
+    const result = await cachedCatalogSearch(
       { provider, query: body.query, limit: body.limit, offset: body.offset },
       (creds ?? {}) as CatalogCredentials,
     );

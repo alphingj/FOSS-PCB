@@ -16,6 +16,9 @@ const {
   lcscSearchUrl,
   matchLibraryMpn,
   clearDigiKeyTokenCache,
+  cachedCatalogSearch,
+  clearCatalogCache,
+  CATALOG_CACHE_TTL_MS,
   CATALOG_MAX_LIMIT,
 } = require('CATDIR/catalog.js');
 
@@ -228,6 +231,32 @@ async function mouserSearch(fetchImpl) {
   let unknownErr = '';
   try { await runCatalogSearch({ provider: 'octopart', query: 'x' }, {}); } catch (e) { unknownErr = e.message; }
   assert(/Unknown catalog provider/.test(unknownErr), 'unknown provider rejected', unknownErr);
+
+  // --- cache: only successful searches, scoped by credentials and page ---
+  clearCatalogCache();
+  let cacheCalls = 0;
+  const cacheFetch = async () => { cacheCalls++; return res(moJson); };
+  const cq = { provider: 'mouser', query: 'NE555DR', limit: 25, offset: 0 };
+  const c1 = await cachedCatalogSearch(cq, { mouser: { apiKey: 'KEY-A' } }, cacheFetch);
+  const c2 = await cachedCatalogSearch(cq, { mouser: { apiKey: 'KEY-A' } }, cacheFetch);
+  assert(cacheCalls === 1, 'identical search is served from cache', cacheCalls);
+  assert(c1 === c2, 'cached result is reused');
+  await cachedCatalogSearch({ ...cq, offset: 25 }, { mouser: { apiKey: 'KEY-A' } }, cacheFetch);
+  assert(cacheCalls === 2, 'a different page is not a cache hit', cacheCalls);
+  await cachedCatalogSearch(cq, { mouser: { apiKey: 'KEY-B' } }, cacheFetch);
+  assert(cacheCalls === 3, 'different credentials never share cached prices', cacheCalls);
+  clearCatalogCache();
+  await cachedCatalogSearch(cq, { mouser: { apiKey: 'KEY-A' } }, cacheFetch);
+  assert(cacheCalls === 4, 'clearCatalogCache forces a fresh request', cacheCalls);
+
+  clearCatalogCache();
+  let failCalls = 0;
+  const failFetch = async () => { failCalls++; return res({ Errors: [{ Message: 'rejected' }] }, 400); };
+  for (let i = 0; i < 2; i++) {
+    try { await cachedCatalogSearch(cq, { mouser: { apiKey: 'KEY-A' } }, failFetch); } catch { /* expected */ }
+  }
+  assert(failCalls === 2, 'errors are never cached', failCalls);
+  assert(CATALOG_CACHE_TTL_MS === 5 * 60_000, 'cache TTL is five minutes', CATALOG_CACHE_TTL_MS);
 
   console.log('ALL CATALOG CHECKS PASSED');
 })().catch((e) => { console.error('FAIL: unhandled', e); process.exit(1); });

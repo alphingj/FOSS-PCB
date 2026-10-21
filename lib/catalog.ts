@@ -70,6 +70,10 @@ export const CATALOG_TIMEOUT_MS = 15000;
 export const CATALOG_MAX_LIMIT = 50;
 export const CATALOG_DEFAULT_LIMIT = 25;
 export const CATALOG_MAX_QUERY = 120;
+/** Successful searches are reused for this long. Distributor stock/prices move,
+ *  so this stays short; errors are never cached. */
+export const CATALOG_CACHE_TTL_MS = 5 * 60_000;
+export const CATALOG_CACHE_MAX = 60;
 
 export const DIGIKEY_TOKEN_URL = 'https://api.digikey.com/v1/oauth2/token';
 export const DIGIKEY_SEARCH_URL = 'https://api.digikey.com/products/v4/search/keyword';
@@ -433,11 +437,56 @@ export async function runCatalogSearch(
   throw new CatalogError(`Unknown catalog provider "${String((query as any).provider)}".`);
 }
 
+// ------------------------------------------------------------------- caching
+
+const searchCache = new Map<string, { at: number; result: CatalogResult }>();
+
+/** Non-reversible credential fingerprint for the cache key. Keys stay in
+ *  memory and are never written to disk; hashing keeps secrets out of the key. */
+function credentialFingerprint(creds: CatalogCredentials): string {
+  const material =
+    creds.digikey ? `d:${creds.digikey.clientId}\u0000${creds.digikey.clientSecret}` : creds.mouser ? `m:${creds.mouser.apiKey}` : 'none';
+  let h = 5381;
+  for (let i = 0; i < material.length; i++) h = ((h << 5) + h + material.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+
+/** Test hook — drop all cached search results. */
+export function clearCatalogCache(): void {
+  searchCache.clear();
+}
+
+/** Cached wrapper around runCatalogSearch. Only successful results are stored,
+ *  per provider + query + page + credential fingerprint, and only for a short
+ *  TTL. A credential change therefore never reuses another account's prices. */
+export async function cachedCatalogSearch(
+  query: CatalogQuery,
+  creds: CatalogCredentials = {},
+  fetchImpl: typeof fetch = fetch,
+): Promise<CatalogResult> {
+  const q = normalizeQuery(query.query);
+  const limit = normalizeLimit(query.limit);
+  const offset = normalizeOffset(query.offset);
+  const key = `${query.provider}|${q.toLowerCase()}|${limit}|${offset}|${credentialFingerprint(creds)}`;
+  const hit = searchCache.get(key);
+  if (hit && Date.now() - hit.at < CATALOG_CACHE_TTL_MS) return hit.result;
+
+  const result = await runCatalogSearch({ ...query, query: q, limit, offset }, creds, fetchImpl);
+  searchCache.delete(key);
+  searchCache.set(key, { at: Date.now(), result });
+  while (searchCache.size > CATALOG_CACHE_MAX) {
+    const oldest = searchCache.keys().next().value;
+    if (oldest === undefined) break;
+    searchCache.delete(oldest);
+  }
+  return result;
+}
+
 /** Transport-agnostic entry point used by the UI. */
 export async function searchCatalog(query: CatalogQuery, creds: CatalogCredentials): Promise<CatalogResult> {
   if (isTauri()) {
     const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
-    return runCatalogSearch(query, creds, tauriFetch as unknown as typeof fetch);
+    return cachedCatalogSearch(query, creds, tauriFetch as unknown as typeof fetch);
   }
   let res: Response;
   try {

@@ -16,21 +16,32 @@ import {
 } from '../lib/catalog';
 import { input, btnPrimary, btnGhost, table, muted, sectionLabel } from '../lib/theme';
 
-// Keys live in this browser only and go straight to the distributor.
+// Credentials stay in this browser only and go straight to the distributor.
+// "Remember on this device" uses localStorage; unchecked keeps them in
+// sessionStorage, so they survive a page reload but not the browser session.
 const LS_KEYS = { mouser: 'foss-cat-mouser', dkId: 'foss-cat-dk-id', dkSecret: 'foss-cat-dk-secret' };
+const PAGE_SIZE = 25;
 
 function readSaved(key: string): string {
   try {
-    return localStorage.getItem(key) ?? '';
+    return sessionStorage.getItem(key) ?? localStorage.getItem(key) ?? '';
   } catch {
     return '';
   }
 }
 
-function writeSaved(key: string, value: string): void {
+function writeSaved(key: string, value: string, remember: boolean): void {
   try {
-    if (value) localStorage.setItem(key, value);
-    else localStorage.removeItem(key);
+    if (!value) {
+      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
+    } else if (remember) {
+      localStorage.setItem(key, value);
+      sessionStorage.removeItem(key);
+    } else {
+      sessionStorage.setItem(key, value);
+      localStorage.removeItem(key);
+    }
   } catch {
     /* private mode — credentials stay in memory for this session */
   }
@@ -68,8 +79,12 @@ export default function LibraryPanel() {
   const [dkId, setDkId] = useState('');
   const [dkSecret, setDkSecret] = useState('');
   const [remember, setRemember] = useState(true);
+  const [hydrated, setHydrated] = useState(false);
   const [liveQuery, setLiveQuery] = useState('');
+  const [searchedQuery, setSearchedQuery] = useState('');
+  const [liveOffset, setLiveOffset] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [moreBusy, setMoreBusy] = useState(false);
   const [liveError, setLiveError] = useState('');
   const [liveResult, setLiveResult] = useState<CatalogResult | null>(null);
   const [lcscCode, setLcscCode] = useState('');
@@ -79,13 +94,17 @@ export default function LibraryPanel() {
     setMouserKey(readSaved(LS_KEYS.mouser));
     setDkId(readSaved(LS_KEYS.dkId));
     setDkSecret(readSaved(LS_KEYS.dkSecret));
+    setHydrated(true);
   }, []);
 
   useEffect(() => {
-    writeSaved(LS_KEYS.mouser, remember ? mouserKey : '');
-    writeSaved(LS_KEYS.dkId, remember ? dkId : '');
-    writeSaved(LS_KEYS.dkSecret, remember ? dkSecret : '');
-  }, [remember, mouserKey, dkId, dkSecret]);
+    // Do not run before the saved values have been read, or the first render
+    // would overwrite stored credentials with the empty initial state.
+    if (!hydrated) return;
+    writeSaved(LS_KEYS.mouser, mouserKey, remember);
+    writeSaved(LS_KEYS.dkId, dkId, remember);
+    writeSaved(LS_KEYS.dkSecret, dkSecret, remember);
+  }, [hydrated, remember, mouserKey, dkId, dkSecret]);
 
   const types = useMemo(() => ['all', ...Array.from(new Set(LIBRARY.map((p) => p.type)))], []);
   const results = useMemo(() => {
@@ -147,22 +166,54 @@ export default function LibraryPanel() {
     }
   };
 
+  const catalogCreds = (): CatalogCredentials =>
+    provider === 'mouser'
+      ? { mouser: { apiKey: mouserKey.trim() } }
+      : provider === 'digikey'
+        ? { digikey: { clientId: dkId.trim(), clientSecret: dkSecret.trim() } }
+        : {};
+
   const runSearch = async () => {
+    const query = liveQuery.trim();
+    if (!query) return;
     setBusy(true);
     setLiveError('');
     setLiveResult(null);
+    setLiveOffset(0);
+    setSearchedQuery(query);
     try {
-      const creds: CatalogCredentials =
-        provider === 'mouser'
-          ? { mouser: { apiKey: mouserKey.trim() } }
-          : provider === 'digikey'
-            ? { digikey: { clientId: dkId.trim(), clientSecret: dkSecret.trim() } }
-            : {};
-      setLiveResult(await searchCatalog({ provider, query: liveQuery, limit: 25 }, creds));
+      const result = await searchCatalog({ provider, query, limit: PAGE_SIZE, offset: 0 }, catalogCreds());
+      setLiveResult(result);
     } catch (e: any) {
       setLiveError(e?.message ?? String(e));
     } finally {
       setBusy(false);
+    }
+  };
+
+  /** Fetch the next page and append it, never replacing already-shown rows. */
+  const loadMore = async () => {
+    if (!liveResult || !searchedQuery || moreBusy || busy) return;
+    const nextOffset = liveOffset + PAGE_SIZE;
+    setMoreBusy(true);
+    setLiveError('');
+    try {
+      const result = await searchCatalog(
+        { provider, query: searchedQuery, limit: PAGE_SIZE, offset: nextOffset },
+        catalogCreds(),
+      );
+      const seen = new Set(liveResult.parts.map((p) => `${p.mpn}|${p.distributorPart}`));
+      const fresh = result.parts.filter((p) => !seen.has(`${p.mpn}|${p.distributorPart}`));
+      setLiveResult({
+        ...result,
+        parts: [...liveResult.parts, ...fresh],
+        note: result.note ?? liveResult.note,
+      });
+      setLiveOffset(nextOffset);
+    } catch (e: any) {
+      setLiveError(e?.message ?? String(e));
+    } finally {
+      setMoreBusy(false);
     }
   };
 
@@ -214,7 +265,7 @@ export default function LibraryPanel() {
         </div>
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
-          <select aria-label="Distributor" value={provider} onChange={(e) => { setProvider(e.target.value as CatalogProvider); setLiveResult(null); setLiveError(''); }} style={input}>
+          <select aria-label="Distributor" value={provider} onChange={(e) => { setProvider(e.target.value as CatalogProvider); setLiveResult(null); setLiveError(''); setLiveOffset(0); setSearchedQuery(''); }} style={input}>
             {CATALOG_PROVIDERS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
           </select>
           {provider !== 'lcsc' && (
@@ -280,7 +331,7 @@ export default function LibraryPanel() {
         {liveResult && (
           <div>
             <div style={{ ...muted, marginBottom: 6 }}>
-              {liveResult.parts.length} of {liveResult.total ?? liveResult.parts.length} {liveResult.total === 1 ? 'match' : 'matches'}
+              Showing {liveResult.parts.length} of {liveResult.total ?? liveResult.parts.length} {liveResult.total === 1 ? 'match' : 'matches'}
               {liveResult.note ? ` — ${liveResult.note}` : ''}
             </div>
             <div style={{ maxHeight: 240, overflow: 'auto' }}>
@@ -315,6 +366,16 @@ export default function LibraryPanel() {
                 </tbody>
               </table>
             </div>
+            {liveResult.parts.length > 0 &&
+              (typeof liveResult.total === 'number'
+                ? liveResult.parts.length < liveResult.total
+                : liveResult.parts.length >= PAGE_SIZE) && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>
+                  <button type="button" onClick={() => void loadMore()} disabled={moreBusy} style={{ ...btnGhost, opacity: moreBusy ? 0.6 : 1 }}>
+                    {moreBusy ? 'Loading…' : 'Load more'}
+                  </button>
+                </div>
+              )}
           </div>
         )}
       </div>
