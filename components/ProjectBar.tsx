@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../lib/store';
 import { isTauri } from '../lib/tauri-bridge';
 import {
-  blankBoard, deleteProject, getProject, listProjects, parseProjectFile,
+  blankBoard, clearSnapshots, deleteProject, deleteSnapshot, getProject, listProjects, parseProjectFile,
   putProject, snapshot, toFileText, type ProjectFile,
 } from '../lib/projects';
 import { download } from '../lib/kicad-io';
@@ -142,6 +142,25 @@ export default function ProjectBar() {
 
   const snaps = getProject(projectId)?.snaps ?? [];
 
+  const doDeleteSnapshot = () => {
+    if (historyT === '') return;
+    if (!window.confirm('Delete this backup? The current board is not affected.')) return;
+    if (deleteSnapshot(projectId, Number(historyT))) {
+      setHistoryT('');
+      setStatus('backup deleted');
+      refresh();
+    }
+  };
+
+  const doClearSnaps = () => {
+    if (!snaps.length) return;
+    if (!window.confirm(`Delete all ${snaps.length} backups for "${projectName}"? The current board is not affected.`)) return;
+    clearSnapshots(projectId);
+    setHistoryT('');
+    setStatus(`${snaps.length} backups deleted`);
+    refresh();
+  };
+
   return (
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', padding: '8px 18px', maxWidth: 1280, margin: '0 auto' }}>
       <input aria-label="Project name" value={projectName} onChange={(e) => setProjectName(e.target.value)} style={{ ...input, width: 190, borderRadius: 980, fontWeight: 600 }} />
@@ -160,21 +179,29 @@ export default function ProjectBar() {
         <option value="">Recents</option>
         {projects.map((p) => <option key={p.id} value={p.id}>{p.name} ({new Date(p.updatedAt).toLocaleString()})</option>)}
       </select>
-      {projects.length > 0 && (
+      {snaps.length > 0 && (
         <select aria-label="Snapshot history" value={historyT} onChange={(e) => setHistoryT(e.target.value ? Number(e.target.value) : '')} style={{ ...input, borderRadius: 980 }}>
           <option value="">History</option>
           {snaps.map((s) => <option key={s.t} value={s.t}>{new Date(s.t).toLocaleString()}</option>)}
         </select>
       )}
       {historyT !== '' && <button type="button" onClick={doRestore} style={btnGhost}>Restore</button>}
+      {historyT !== '' && <button type="button" onClick={doDeleteSnapshot} style={{ ...btnPlain, color: 'var(--danger)' }}>Delete backup</button>}
+      {snaps.length > 0 && <button type="button" onClick={doClearSnaps} style={{ ...btnPlain, color: 'var(--danger)' }}>Clear backups</button>}
       {status && <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{status}</span>}
       {projects.length > 1 && (
         <button
           type="button"
-          onClick={() => { deleteProject(projectId); const rest = listProjects(); setProjects(rest); if (rest[0]) openProject(rest[0]); }}
+          onClick={() => {
+            if (!window.confirm(`Delete project "${projectName}" and its backups? This cannot be undone.`)) return;
+            deleteProject(projectId);
+            const rest = listProjects();
+            setProjects(rest);
+            if (rest[0]) openProject(rest[0]);
+          }}
           style={{ ...btnPlain, color: 'var(--danger)' }}
         >
-          Delete
+          Delete project
         </button>
       )}
     </div>

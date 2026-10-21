@@ -1,6 +1,6 @@
 # FOSS-PCB Build Plan — Post-LCSC Milestone
 
-**Status:** LCSC coverage complete — 35/36 library parts verified (`CL21A106KAFNNNE` stays blank; LCSC's C15850 is a different thickness variant). Phase 1 layout engine complete. Phase 2.1 AI part generator complete. Phase 2.2 live distributor catalog complete (DigiKey v4 + Mouser v1 search; LCSC via links, no public API). Phase 3.1 CLI complete (build from source; npm publish still pending).
+**Status:** LCSC coverage complete — 35/36 library parts verified (`CL21A106KAFNNNE` stays blank; LCSC's C15850 is a different thickness variant). Phase 1 layout engine complete. Phase 2.1 AI part generator complete. Phase 2.2 live distributor catalog complete (DigiKey v4 + Mouser v1 search; LCSC via links, no public API). Phase 3.1 CLI complete (build from source; npm publish still pending). Phase 3.2 MCP server complete. Project backups can now be deleted individually or cleared.
 
 **Goal:** Build every ProtoFlow-class capability that's realistically achievable for a desktop-first, BYOK, open-source EDA. Explicitly out of scope: live collaboration, ngspice live linking, MCU co-simulation, Linux/Android targets, signed installers, auto-updater.
 
@@ -69,10 +69,16 @@ KiCad 10 zone grammar: `polygon`/`connect_pads`/`min_thickness`/`fill`/`hatch`, 
 - The package is **not published** — `npx -y foss-pcb-cli` requires an npm publish/token (release task). Until then: `npm run cli:build && npm link ./cli`.
 **Verification:** `clicheck.cjs` (26 assertions: exit codes, JSON/human output, LCSC honesty, missing-key messages, off-board DRC failure, KiCad export, invalid input). The exported demo was loaded by real `kicad-cli pcb drc`: 0 errors, the 2 known demo-via warnings, 7 unconnected (unrouted).
 
-### 3.2 MCP Interface
-**Files:** New `mcp/` directory
-**What:** Model Context Protocol server so external assistants (Claude, etc.) can drive FOSS-PCB: read netlist, run DRC, export KiCad, place parts.
-**Verification:** MCP handshake test; `run_python_plugin` path already exists in `commands.rs`.
+### 3.2 MCP Interface ✅
+**Files:** `mcp/server.ts`, `mcp/tsconfig.json`, `mcp/package.json`, `mcpcheck.cjs`, `lib/board-io.ts`
+**What:**
+- Stdio MCP server (JSON-RPC 2.0, one message per line) with no SDK dependency; negotiates 2024-11-05 / 2025-03-26 / 2025-06-18 and falls back to the latest for unknown versions
+- Tools: `library_search` (verified MPNs, pin labels, LCSC codes), `board_summary` (size, layers, placements, nets), `board_drc` (the app's own rules), `export_kicad` (same emitter as the app), `place_part` (verified library parts only), `catalog_search` (Mouser/DigiKey with keys from the environment)
+- Safety rails: `place_part` writes a **new** file (refuses to overwrite the input), rejects off-board coordinates, duplicate designators and unknown MPNs (suggesting `library_search`); placed pins start on GND exactly like the app
+- LCSC is refused with an explanation (no public API); catalog rows are labelled ordering data, not verified footprints
+- Nothing is hidden: tool failures come back as `isError` text with the real reason; unknown tools/methods are proper JSON-RPC errors
+**Limitations (honest):** local stdio only — no HTTP/SSE transport, no auth (any local process that can spawn it can call it), and it operates on board files rather than driving the open GUI.
+**Verification:** `mcpcheck.cjs` (42 assertions: handshake + version fallback, notifications stay silent, tool schemas, every tool's success and failure paths, protocol errors, stdout purity, clean shutdown). A board exported by `export_kicad` was loaded by real KiCad 10.0.6: **0 violations, 0 unconnected**. The CLI and MCP now share `lib/board-io.ts`, so file parsing/rewriting cannot drift.
 
 ### 3.3 Git integration
 **Files:** `lib/git.ts`, `components/ProjectBar.tsx` (branch/diff UI)
@@ -102,9 +108,10 @@ npx tsc --noEmit          # TypeScript clean
 npm run build             # Next build green
 cargo check               # Rust clean
 cargo test                # 7/7 Rust tests
-node scripts/prepare-checks.cjs simcheck.cjs ./check-out simcheck-run.cjs   # (repeat for routecheck, padcheck, spicecheck, fabcheck, repaircheck, partgencheck, catalogcheck)
-node simcheck-run.cjs     # (repeat for all 8)
+node scripts/prepare-checks.cjs simcheck.cjs ./check-out simcheck-run.cjs   # (repeat for routecheck, padcheck, spicecheck, fabcheck, repaircheck, partgencheck, catalogcheck, backupcheck)
+node simcheck-run.cjs     # (repeat for all 9)
 node clicheck.cjs         # after: npm run cli:build
+node mcpcheck.cjs         # after: npm run mcp:build
 python python/padcheck_py.py
 python python/verify_plugins.py
 python python/kicad_verify.py   # Real KiCad 10.0.6 DRC on both emitters
@@ -116,7 +123,7 @@ git commit && git push
 
 ## Definition of Done
 
-- All 8 mocked check suites + the CLI suite (`clicheck.cjs`) green
+- All 9 mocked check suites + the CLI (`clicheck.cjs`) and MCP (`mcpcheck.cjs`) suites green
 - All 4 Python check scripts green
 - `kicad_verify.py` shows 0 DRC errors on both emitters (warnings reported)
 - `tsc --noEmit` clean, `npm run build` green, `cargo test` 7/7

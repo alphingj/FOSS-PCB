@@ -83,6 +83,29 @@ export function snapshot(p: ProjectFile): ProjectFile {
   return { ...p, snaps, updatedAt: Date.now() };
 }
 
+/** Remove one backup snapshot. Returns false when the project or snapshot is gone. */
+export function deleteSnapshot(id: string, t: number): boolean {
+  const s = readStore();
+  const p = s[id];
+  if (!p) return false;
+  const before = p.snaps.length;
+  p.snaps = p.snaps.filter((snap) => snap.t !== t);
+  if (p.snaps.length === before) return false;
+  writeStore(s);
+  return true;
+}
+
+/** Remove every backup snapshot for a project. Returns false when it is gone. */
+export function clearSnapshots(id: string): boolean {
+  const s = readStore();
+  const p = s[id];
+  if (!p) return false;
+  if (!p.snaps.length) return true;
+  p.snaps = [];
+  writeStore(s);
+  return true;
+}
+
 /** Accept a .foss.json envelope ({app, pcb}) or a bare FOSS board. */
 export function parseProjectFile(text: string, fallbackName: string): ProjectFile {
   const obj = JSON.parse(text);

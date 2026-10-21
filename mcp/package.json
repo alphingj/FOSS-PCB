@@ -1,0 +1,11 @@
+{
+  "name": "foss-pcb-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for FOSS-PCB: verified library search, DRC, KiCad export and part placement",
+  "private": true,
+  "bin": { "foss-pcb-mcp": "dist/mcp/server.js" },
+  "files": ["dist"],
+  "engines": { "node": ">=20" },
+  "dependencies": { "zod": "^3.23.0" },
+  "license": "MIT"
+}

@@ -10,7 +10,9 @@
     "tauri:dev": "cargo tauri dev",
     "tauri:build": "cargo tauri build",
     "tauri:icon": "cargo tauri icon src-tauri/icons/icon.png",
-    "cli:build": "tsc -p cli/tsconfig.json"
+    "cli:build": "tsc -p cli/tsconfig.json",
+    "mcp:build": "tsc -p mcp/tsconfig.json",
+    "mcp": "npm run mcp:build && node mcp/dist/mcp/server.js"
   },
   "dependencies": {
     "@react-three/drei": "^9.114.0",

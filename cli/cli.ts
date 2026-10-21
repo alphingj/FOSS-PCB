@@ -4,11 +4,12 @@
 //
 // Exit codes: 0 success / no DRC errors, 1 DRC errors or a failed operation,
 // 2 usage or invalid-input errors.
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { LIBRARY } from '../lib/library';
-import { FossPcbJson, type FossPcb } from '../lib/foss-schema';
+import { type FossPcb } from '../lib/foss-schema';
+import { readBoardFile } from '../lib/board-io';
 import { runDrc } from '../lib/drc';
 import { fossToKicadPcb } from '../lib/kicad-io';
 import { SAMPLE_BUCKBOOST } from '../lib/sample-buckboost';
@@ -142,29 +143,11 @@ function printParts(provider: string, query: string, parts: CliPart[], total?: n
 // -------------------------------------------------------------------- board
 
 function readBoard(file: string): FossPcb {
-  if (!existsSync(file)) throw new CliError(`File not found: ${file}`);
-  let text: string;
   try {
-    text = readFileSync(file, 'utf8');
+    return readBoardFile(file).pcb;
   } catch (e: any) {
-    throw new CliError(`Cannot read ${file}: ${e?.message ?? e}`);
+    throw new CliError(e?.message ?? String(e));
   }
-  let obj: any;
-  try {
-    obj = JSON.parse(text);
-  } catch (e: any) {
-    throw new CliError(`${file} is not JSON: ${e?.message ?? e}`);
-  }
-  const raw = obj && typeof obj === 'object' && 'pcb' in obj ? obj.pcb : obj;
-  const parsed = FossPcbJson.safeParse(raw);
-  if (!parsed.success) {
-    const details = parsed.error.issues
-      .slice(0, 3)
-      .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
-      .join('; ');
-    throw new CliError(`${file} is not a valid FOSS board — ${details}`);
-  }
-  return parsed.data;
 }
 
 // ------------------------------------------------------------------ commands

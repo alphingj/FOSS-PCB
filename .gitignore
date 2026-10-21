@@ -20,3 +20,6 @@ Thumbs.db
 
 # CLI build output
 cli/dist/
+
+# MCP build output
+mcp/dist/

@@ -9,8 +9,10 @@
   zones, vias, rip-up routing), `padcheck` (TS+Python KiCad pads), `spicecheck`
   (netlist), `fabcheck` (Gerber 4.6/Excellon), `repaircheck` (validator loop),
   `partgencheck` (symbol/footprint generator), `catalogcheck` (DigiKey/Mouser
-  request shapes, normalisation and error surfacing) — run via
-  `node scripts/prepare-checks.cjs`; `clicheck` covers the CLI (build first)
+  request shapes, normalisation and error surfacing), `backupcheck`
+  (snapshot delete/clear + `.foss.json` round-trip) — run via
+  `node scripts/prepare-checks.cjs`; `clicheck` covers the CLI and `mcpcheck`
+  the MCP server (build both first)
 - **Real KiCad**: `python python/kicad_verify.py` exports the demo board from
   both emitters (TypeScript and Python), runs `kicad-cli pcb drc` on each and
   asserts 0 errors plus emitter parity (warnings are reported). `python python/partgen_verify.py`
@@ -47,6 +49,28 @@ published to npm yet, so `npx foss-pcb-cli` will not work until a release is
 published; use `npm link ./cli`. `drc` reads `.foss.json` — for a `.kicad_pcb`
 use KiCad's own `kicad-cli pcb drc`.
 
+## MCP (assistants)
+
+```
+npm run mcp:build
+node mcp/dist/mcp/server.js        # stdio JSON-RPC; point your MCP client here
+```
+
+Tools: `library_search`, `board_summary`, `board_drc`, `export_kicad`,
+`place_part`, `catalog_search`. They use the same libraries as the app, so DRC
+and export match the UI exactly. `place_part` only accepts verified library
+MPNs, writes to a new file (never overwrites the input), rejects off-board
+coordinates and duplicate designators, and leaves every new pin on GND.
+Live catalog search reads keys from the environment, never from arguments.
+The server is local stdio only — there is no HTTP transport and no auth.
+
+## Projects and backups
+
+Projects autosave to this browser. Each save keeps up to 20 snapshots; the
+project bar can restore one, **delete a single backup**, or **clear all
+backups** (both ask first, and neither touches the current board). Deleting a
+project removes its backups too.
+
 ## Flow
 
 Prompt → BOM + Netlist + strict JSON (zod-validated, last-block parse) → schematic
@@ -81,7 +105,10 @@ components/             ProviderBar, PromptBox, OutputTabs, ExportBar,
                         StackupEditor, DiagnosticsPanel
 lib/                    foss-schema.ts (contract), drc.ts, erc.ts, routing.ts,
                         kicad-io.ts, kicad-pads.ts, fab.ts, partgen.ts,
-                        partgen-prompt.ts, tauri-bridge.ts, chat-direct.ts, sim/
+                        partgen-prompt.ts, board-io.ts, tauri-bridge.ts,
+                        chat-direct.ts, sim/
+cli/                    search / drc / export-kicad / demo (compiled to cli/dist)
+mcp/                    stdio MCP server (compiled to mcp/dist)
 src-tauri/              Tauri 2 + Rust core (kicad parse, drc, router, commands)
 python/foss_pcb/        kicad_compat, footprint, step_export, sim, runner
 plugins/                bom_export, drc_report, step_export (run() entrypoint)
@@ -131,6 +158,11 @@ No secrets live in this repo — thumbprints/identities go in local config only.
 - The CLI is not published yet, and its `drc` takes `.foss.json` (use
   `kicad-cli pcb drc` for a `.kicad_pcb`). Live CLI search reads keys from the
   environment and has the same verified-vs-unverified limits as the app panel.
+- MCP is local stdio only (no HTTP/SSE, no auth) and works on board files, not
+  the open GUI. `place_part` places library parts only — custom footprints
+  still go through the Part Generator.
+- Backups live in this browser's localStorage (20 per project); they are not
+  synced or exported. Clearing them is permanent.
 - STEP export is a manifest stub until CadQuery/PythonOCC is wired.
 - Scope/Lab run a local bench: value parsing (R/C/L strings → SI, incl. 4K7
   notation and case-sensitive M vs m), MNA DC divider check, and a CCM
