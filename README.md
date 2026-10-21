@@ -28,7 +28,10 @@ cargo tauri dev      # desktop shell (needs Rust stable + Node)
 cargo tauri build    # Windows .msi / macOS .dmg
 ```
 
-Python extras (optional, for solid STEP later): `pip install -r python/requirements.txt`
+Python is optional: it powers the plugin runner and `.kicad_pcb` export. Solid STEP
+export uses KiCad's own OpenCASCADE exporter, so install KiCad 8+ (or point
+`KICAD_CLI` at its `kicad-cli` binary) to enable it. `pip install -r python/requirements.txt`
+is only needed for the optional plugin stack.
 
 ## CLI
 
@@ -135,9 +138,10 @@ No secrets live in this repo — thumbprints/identities go in local config only.
 ## Known limits (honest)
 
 - Autorouter is rip-up-and-refit over a coarse BFS grid (45° simplification,
-  point obstacles) — not true geometric push-and-shove; manual routing remains
-  the precise path. DRC covers bounds, nets, trace/pad/via/zone clearances and
-  zone overlap, not every KiCad rule.
+  rasterised trace segments and per-net pour keep-outs) — not true geometric
+  push-and-shove; manual routing remains the precise path. DRC covers bounds,
+  nets, same-layer trace/pad/via/zone clearances (measured copper edge to
+  copper edge, with trace widths) and zone overlap, not every KiCad rule.
 - Copper zones export as unfilled outlines; KiCad computes the pour on load.
   The in-app renderer shows zone bounds, not a simulated fill. The demo board
   ships two GND vias with no traces, so KiCad reports them as dangling until
@@ -163,7 +167,12 @@ No secrets live in this repo — thumbprints/identities go in local config only.
   still go through the Part Generator.
 - Backups live in this browser's localStorage (20 per project); they are not
   synced or exported. Clearing them is permanent.
-- STEP export is a manifest stub until CadQuery/PythonOCC is wired.
+- STEP export is real AP214 geometry produced by KiCad's OpenCASCADE exporter
+  from the generated `.kicad_pcb` (board outline and copper; component bodies
+  appear only where KiCad has a 3D model for the footprint — the built-in
+  library parts currently ship without models). It needs the desktop app and
+  KiCad 8+ (`kicad-cli`); without KiCad it reports that clearly instead of
+  writing a placeholder file. The web preview cannot export STEP.
 - Scope/Lab run a local bench: value parsing (R/C/L strings → SI, incl. 4K7
   notation and case-sensitive M vs m), MNA DC divider check, and a CCM
   cycle-average switching model with Vf/Rds/DCR solved by bisection — no

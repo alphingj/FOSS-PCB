@@ -1,5 +1,7 @@
 const { bfsRoute, simplify, segSegDist, tryRoute, ripupAutoroute } = require('ROUTEDIR/routing.js');
 const { runDrc } = require('ROUTEDIR/drc.js');
+const { autorouteBoard } = require('ROUTEDIR/autoroute.js');
+const { SAMPLE_BUCKBOOST } = require('ROUTEDIR/sample-buckboost.js');
 
 const assert = (c, m, v) => { if (!c) { console.error('FAIL: ' + m, v ?? ''); process.exit(1); } else console.log('ok: ' + m); };
 
@@ -47,6 +49,25 @@ const board2 = { ...board, pcb_traces: board.pcb_traces.map((t) => ({ ...t, net:
 const iss2 = runDrc(board2);
 assert(!iss2.some((i) => i.message.includes('clearance')), 'same-net overlap not flagged');
 
+// DRC: copper on opposite layers cannot short, so no clearance error.
+const board2b = { ...board, pcb_traces: [
+  { id: 'b1', net: 'A', layer: 'Top', pts_mm: [[10, 10], [20, 10]], width_mm: 0.25 },
+  { id: 'b2', net: 'B', layer: 'Bottom', pts_mm: [[10, 10], [20, 10]], width_mm: 0.25 },
+] };
+assert(!runDrc(board2b).some((i) => i.message.includes('clearance')), 'opposite-layer traces are fine');
+
+// DRC: trace edges (not centre lines) drive the clearance check.
+const edgeTight = { ...board, pcb_traces: [
+  { id: 'e1', net: 'A', layer: 'Top', pts_mm: [[10, 10], [20, 10]], width_mm: 0.5 },
+  { id: 'e2', net: 'B', layer: 'Top', pts_mm: [[10, 10.6], [20, 10.6]], width_mm: 0.5 },
+] };
+assert(runDrc(edgeTight).some((i) => i.message.includes('clearance')), '0.1mm edge gap flagged (centres 0.6mm apart)');
+const edgeOk = { ...board, pcb_traces: [
+  { id: 'e3', net: 'A', layer: 'Top', pts_mm: [[10, 10], [20, 10]], width_mm: 0.5 },
+  { id: 'e4', net: 'B', layer: 'Top', pts_mm: [[10, 10.8], [20, 10.8]], width_mm: 0.5 },
+] };
+assert(!runDrc(edgeOk).some((i) => i.message.includes('clearance')), '0.3mm edge gap passes');
+
 // DRC: off-board trace point flagged
 const board3 = { ...board, pcb_traces: [{ id: 't9', net: 'A', layer: 'Top', pts_mm: [[10, 10], [60, 10]], width_mm: 0.25 }] };
 assert(runDrc(board3).some((i) => i.message.includes('leaves the board')), 'off-board flagged');
@@ -86,6 +107,28 @@ const zTraceSame = { ...board, pcb_layout_zones: [
   { id: 'zts', net: 'GND', layer: 'Top', pts_mm: [[12, 12], [18, 18]], width_mm: 0.25 },
 ] };
 assert(!runDrc(zTraceSame).some((i) => i.message.includes('too close to trace')), 'same-net trace in zone OK');
+
+// DRC: a pour on the other side does not constrain top traces.
+const zBottom = { ...board, pcb_layout_zones: [
+  { zone_name: 'BZ', net: 'GND', layer: 'Bottom', bounding_box_mm: { x1: 10, y1: 10, x2: 20, y2: 20 }, rule: 'x' },
+], pcb_traces: [
+  { id: 'bt', net: 'A', layer: 'Top', pts_mm: [[10, 15], [20, 15]], width_mm: 0.25 },
+] };
+assert(!runDrc(zBottom).some((i) => i.message.includes('too close to trace')), 'bottom pour does not flag a top trace');
+
+// DRC: edge distance to a pour, not centre distance.
+const zNear = { ...board, pcb_layout_zones: [
+  { zone_name: 'Z1', net: 'GND', layer: 'Top', bounding_box_mm: { x1: 10, y1: 10, x2: 20, y2: 20 }, rule: 'x' },
+], pcb_traces: [
+  { id: 'zn', net: 'A', layer: 'Top', pts_mm: [[12, 20.2], [18, 20.2]], width_mm: 0.25 },
+] };
+assert(runDrc(zNear).some((i) => i.message.includes('too close to trace')), 'trace edge inside pour clearance flagged');
+const zSafe = { ...board, pcb_layout_zones: [
+  { zone_name: 'Z1', net: 'GND', layer: 'Top', bounding_box_mm: { x1: 10, y1: 10, x2: 20, y2: 20 }, rule: 'x' },
+], pcb_traces: [
+  { id: 'zs', net: 'A', layer: 'Top', pts_mm: [[12, 20.5], [18, 20.5]], width_mm: 0.25 },
+] };
+assert(!runDrc(zSafe).some((i) => i.message.includes('too close to trace')), 'trace outside pour clearance passes');
 
 // DRC: overlapping different-net zones flagged
 const zOverlap = { ...board, pcb_layout_zones: [
@@ -164,5 +207,22 @@ const owners2 = new Map([
 const rr2 = ripupAutoroute(50, 35, [{ net_name: 'A', trace_width_mm: 0.25 }, { net_name: 'B', trace_width_mm: 0.25 }], owners2, []);
 assert(rr2.routed === 2, 'crossing nets both routed', JSON.stringify(rr2));
 assert(rr2.traces.every((t) => t.pts_mm.length >= 2), 'all routed traces have geometry');
+
+// Zone-aware autoroute: the demo's top-layer SW pour must push other nets out.
+const routedDemo = autorouteBoard(SAMPLE_BUCKBOOST);
+const demoErrors = runDrc(routedDemo).filter((i) => i.severity === 'error');
+assert(routedDemo.pcb_traces.length >= 5, 'demo autoroute connects the signal nets', routedDemo.pcb_traces.length);
+assert(demoErrors.length === 0, 'demo autoroute passes DRC', JSON.stringify(demoErrors));
+
+// A zone covering the whole board on the top layer makes routing impossible;
+// the router must not pretend to connect through it.
+const walled = {
+  ...SAMPLE_BUCKBOOST,
+  pcb_layout_zones: [
+    ...SAMPLE_BUCKBOOST.pcb_layout_zones.filter((z) => z.net === 'SW'),
+    { zone_name: 'FullTop', net: 'ZZZ_NOT_A_NET', layer: 'Top', bounding_box_mm: { x1: 0, y1: 0, x2: 50, y2: 35 }, rule: 'wall' },
+  ],
+};
+assert(autorouteBoard(walled).pcb_traces.length === 0, 'full-board foreign pour blocks routing instead of crossing it');
 
 console.log('ALL ROUTE/DRC CHECKS PASSED');

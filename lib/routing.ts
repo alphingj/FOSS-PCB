@@ -129,13 +129,49 @@ export function tryRoute(
   return null; // no path
 }
 
-/** Convert existing traces into obstacle points for the router. Each vertex
- *  becomes a blocked cell; the grid step (1mm) keeps this cheap. */
-export function traceObstacles(traces: { pts_mm: [number, number][] }[]): Pt[] {
+/** Copper pour rectangle (zone) the router must keep other nets out of. */
+export interface ZoneRect {
+  net: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  /** Pour-to-trace clearance for this net, in mm. */
+  clearance_mm?: number;
+}
+
+/** Grid cells covering a zone plus its clearance and the routing trace's half
+ *  width. Non-same-net routes are kept out; same-net copper may enter (the pour
+ *  itself). The half width matters: a 1.5mm power trace needs its copper edge,
+ *  not its centreline, clear of the pour. */
+export function rasterZone(z: ZoneRect, step = 1, halfTrace = 0.25): Pt[] {
+  const margin = (z.clearance_mm ?? 0.2) + halfTrace + 0.01;
   const out: Pt[] = [];
-  for (const t of traces) for (const [x, y] of t.pts_mm) out.push({ x, y });
+  const x0 = Math.floor((z.x1 - margin) / step) * step;
+  const y0 = Math.floor((z.y1 - margin) / step) * step;
+  for (let x = x0; x <= z.x2 + margin; x += step)
+    for (let y = y0; y <= z.y2 + margin; y += step)
+      out.push({ x: +x.toFixed(2), y: +y.toFixed(2) });
   return out;
 }
+
+/** Convert existing traces into obstacle points for the router. Vertices and
+ *  intermediate 1mm cells are blocked so a new route cannot cross a segment
+ *  between its endpoints. */
+export function traceObstacles(traces: { pts_mm: [number, number][] }[], step = 1): Pt[] {
+  const out: Pt[] = [];
+  for (const t of traces) {
+    for (let i = 0; i + 1 < t.pts_mm.length; i++) {
+      const [x1, y1] = t.pts_mm[i];
+      const [x2, y2] = t.pts_mm[i + 1];
+      const n = Math.max(1, Math.ceil(Math.hypot(x2 - x1, y2 - y1) / step));
+      for (let k = 0; k <= n; k++)
+        out.push({ x: +(x1 + ((x2 - x1) * k) / n).toFixed(2), y: +(y1 + ((y2 - y1) * k) / n).toFixed(2) });
+    }
+  }
+  return out;
+}
+
 
 export interface RipupResult {
   traces: { id: string; net: string; pts_mm: [number, number][]; width_mm: number }[];
@@ -153,9 +189,27 @@ export function ripupAutoroute(
   nets: { net_name: string; trace_width_mm: number }[],
   owners: Map<string, [Pt, Pt]>,   // net -> [from, to]
   staticBlocked: Pt[],
+  zones: ZoneRect[] = [],
 ): RipupResult {
   const traces: RipupResult['traces'] = [];
   const ripped: RipupResult['traces'] = [];
+  const zoneCells = new Map<string, Pt[]>();
+  /** Zone obstacles for one net, widened by that net's trace half width. */
+  const cellsFor = (net: string, width: number): Pt[] => {
+    const key = `${net}:${width}`;
+    let c = zoneCells.get(key);
+    if (!c) {
+      c = zones.filter((z) => z.net !== net).flatMap((z) => rasterZone(z, 1, width / 2));
+      zoneCells.set(key, c);
+    }
+    return c;
+  };
+  /** Per-net obstacles: shared blockers, other nets' pours, placed traces. */
+  const obstaclesFor = (net: string, width: number): Pt[] => [
+    ...staticBlocked,
+    ...cellsFor(net, width),
+    ...traceObstacles(traces),
+  ];
   let seq = 0;
   const add = (net: string, pts: Pt[], width: number) => {
     const clean = simplify(pts).map((p) => [p.x, p.y] as [number, number]);
@@ -166,7 +220,7 @@ export function ripupAutoroute(
     const ends = owners.get(n.net_name);
     if (!ends) continue;
     const [from, to] = ends;
-    let path = tryRoute(boardW, boardH, from, to, [...staticBlocked, ...traceObstacles(traces)]);
+    let path = tryRoute(boardW, boardH, from, to, obstaclesFor(n.net_name, n.trace_width_mm));
     if (path) { add(n.net_name, path, n.trace_width_mm); continue; }
     // Blocked: rip up the traces that sit on the straight line, then retry.
     const keep: typeof traces = [];
@@ -176,7 +230,7 @@ export function ripupAutoroute(
     }
     traces.length = 0;
     traces.push(...keep);
-    path = tryRoute(boardW, boardH, from, to, [...staticBlocked, ...traceObstacles(traces)]);
+    path = tryRoute(boardW, boardH, from, to, obstaclesFor(n.net_name, n.trace_width_mm));
     if (path) add(n.net_name, path, n.trace_width_mm);
   }
   // Re-route the ripped traces around everything now placed.
@@ -184,7 +238,7 @@ export function ripupAutoroute(
     const ends = owners.get(r.net);
     if (!ends) continue;
     const [from, to] = ends;
-    const path = tryRoute(boardW, boardH, from, to, [...staticBlocked, ...traceObstacles(traces)]);
+    const path = tryRoute(boardW, boardH, from, to, obstaclesFor(r.net, r.width_mm));
     if (path) add(r.net, path, r.width_mm);
   }
   return { traces, routed: traces.length, ripped: ripped.length };

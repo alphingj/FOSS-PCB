@@ -37,3 +37,24 @@ r = subprocess.run([sys.executable, "-m", "foss_pcb.runner", "drc_report"],
                    capture_output=True, text=True, env={**dict(__import__("os").environ), **ENV})
 print("=== drc_report ===")
 print(r.stdout)
+
+# STEP export must be real geometry or an actionable error — never a manifest.
+r = subprocess.run([sys.executable, "-m", "foss_pcb.step_export"],
+                   input=payload, capture_output=True, text=True,
+                   env={**dict(__import__("os").environ), **ENV})
+print("=== step_export ===")
+assert r.returncode == 0, f"step_export exited {r.returncode}: {r.stderr[-400:]}"
+data = json.loads(r.stdout)
+assert "step-stub" not in r.stdout.lower(), "STEP exporter must not emit a stub"
+if "error" in data:
+    # Machines without KiCad must say so plainly and name the fix.
+    assert "KiCad" in data["error"], f"unhelpful STEP error: {data['error']}"
+    print("step: unavailable —", data["error"])
+else:
+    step = data.get("step", "")
+    assert step.startswith("ISO-10303-21;"), "STEP header missing"
+    assert "AUTOMOTIVE_DESIGN" in step[:800], "STEP schema is not AP214"
+    assert len(step) > 1000, "STEP payload is implausibly small"
+    assert data.get("backend") == "kicad-cli"
+    print(f"step: real AP214 via {data['backend']}, {len(step)} bytes, file {data.get('file')}")
+

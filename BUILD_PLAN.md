@@ -1,6 +1,6 @@
 # FOSS-PCB Build Plan — Post-LCSC Milestone
 
-**Status:** LCSC coverage complete — 35/36 library parts verified (`CL21A106KAFNNNE` stays blank; LCSC's C15850 is a different thickness variant). Phase 1 layout engine complete. Phase 2.1 AI part generator complete. Phase 2.2 live distributor catalog complete (DigiKey v4 + Mouser v1 search; LCSC via links, no public API). Phase 3.1 CLI complete (build from source; npm publish still pending). Phase 3.2 MCP server complete. Project backups can now be deleted individually or cleared.
+**Status:** LCSC coverage complete - 35/36 library parts verified (`CL21A106KAFNNNE` stays blank; LCSC's C15850 is a different thickness variant). Phase 1 layout engine complete. Phase 2.1 AI part generator complete. Phase 2.2 live distributor catalog complete (DigiKey v4 + Mouser v1 search; LCSC via links, no public API). Phase 3.1 CLI complete (build from source; npm publish still pending). Phase 3.2 MCP server complete. Phase 3.4 STEP export complete (KiCad OpenCASCADE backend). Project backups can now be deleted individually or cleared.
 
 **Goal:** Build every ProtoFlow-class capability that's realistically achievable for a desktop-first, BYOK, open-source EDA. Explicitly out of scope: live collaboration, ngspice live linking, MCU co-simulation, Linux/Android targets, signed installers, auto-updater.
 
@@ -85,10 +85,13 @@ KiCad 10 zone grammar: `polygon`/`connect_pads`/`min_thickness`/`fill`/`hatch`, 
 **What:** Branching, diff viewer, visual git diff overlays (like ProtoFlow). Store `.foss.json` in git.
 **Verification:** `tsc --noEmit`, manual git round-trip test.
 
-### 3.4 STEP export
-**Files:** `python/foss_pcb/step_export.py` (CadQuery/OpenCascade via Python sidecar)
-**What:** Replace the stub with real 3D STEP generation from footprints + placement.
-**Verification:** `python/verify_plugins.py` — STEP parses (even if empty bodies initially).
+### 3.4 STEP export - ? COMPLETE
+**Files:** `python/foss_pcb/step_export.py`, `src-tauri/src/commands.rs`, `components/ExportBar.tsx`
+**What:**
+- The stub is gone. The sidecar serialises the board to `.kicad_pcb` and runs KiCad's own OpenCASCADE exporter (`kicad-cli pcb export step`), returning real AP214 text plus a file name; the desktop command returns a JSON envelope and the UI downloads `<design>.step`
+- KiCad is auto-detected on Windows/macOS (or set `KICAD_CLI`); no ~500 MB CadQuery install and no CAD kernel of our own to maintain
+- Without KiCad the exporter returns an actionable error and the UI shows it — it never fabricates a placeholder file. The web preview explains that STEP needs the desktop app
+**Verification:** `python/verify_plugins.py` asserts the result is AP214 (`ISO-10303-21` + `AUTOMOTIVE_DESIGN`, >1 KB) and contains no stub marker; on machines without KiCad the error must name KiCad. Locally the demo board emits a 9 KB STEP file. Honest limit: component bodies appear only where KiCad has 3D models for the footprints; the built-in library parts currently have none, so the STEP contains the board and pads.
 
 ---
 

@@ -143,14 +143,25 @@ pub fn run_python_plugin(app: AppHandle, plugin: String, args_json: String) -> S
     // args via stdin: immune to shell quote-mangling on every platform.
     match run_python_module(&app, "foss_pcb.runner", &[&plugin], &args_json) {
         Ok(s) => s,
-        Err(e) => format!("{{\"error\":\"{e}\"}}"),
+        Err(e) => error_json(&e),
+    }
+}
+
+/// Escape an error message so the frontend can always JSON.parse the result.
+fn error_json(message: &str) -> String {
+    match serde_json::to_string(message) {
+        Ok(escaped) => format!("{{\"error\":{escaped}}}"),
+        Err(_) => "{\"error\":\"unknown error\"}".to_string(),
     }
 }
 
 #[tauri::command]
 pub fn export_step(app: AppHandle, foss_json: String) -> String {
     match run_python_module(&app, "foss_pcb.step_export", &[], &foss_json) {
-        Ok(s) if !s.is_empty() => s,
-        _ => format!("step-stub:{}", foss_json.chars().take(64).collect::<String>()),
+        // The Python module returns a JSON envelope: either a real STEP payload
+        // or an actionable {"error": ...}. Never synthesise a placeholder here.
+        Ok(s) if s.trim_start().starts_with('{') => s,
+        Ok(_) => error_json("STEP exporter returned no output"),
+        Err(e) => error_json(&format!("STEP export failed: {e}")),
     }
 }

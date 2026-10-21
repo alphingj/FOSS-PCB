@@ -2,7 +2,7 @@
 import { useRef, useState } from 'react';
 import { useStore } from '../lib/store';
 import { runDrc } from '../lib/drc';
-import { ripupAutoroute, type Pt } from '../lib/routing';
+import { autorouteBoard } from '../lib/autoroute';
 import { bodySizeForFootprint } from '../lib/models-3d';
 import { seg, btnPlain, muted } from '../lib/theme';
 
@@ -107,24 +107,7 @@ export default function BoardCanvas2D() {
    *  traces already placed; if blocked, the blocking traces are ripped up and
    *  re-routed in a second pass. Later nets can displace earlier ones. */
   const autoroute = () => {
-    const byDes = new Map(pcb.components.map((c) => [c.designator, c]));
-    const staticBlocked = pcb.components.map((c) => ({ x: c.pcb_placement_mm.x, y: c.pcb_placement_mm.y }));
-    const owners = new Map<string, [Pt, Pt]>();
-    for (const n of pcb.nets.filter((x) => x.net_name !== 'GND')) {
-      const own = Array.from(new Set(n.nodes.map((nd) => nd.split('.')[0]).filter((d) => byDes.has(d))));
-      if (own.length < 2) continue;
-      const a = byDes.get(own[0])!.pcb_placement_mm;
-      const b = byDes.get(own[1])!.pcb_placement_mm;
-      owners.set(n.net_name, [
-        { x: Math.min(a.x + 2, W), y: a.y },
-        { x: Math.max(b.x - 2, 0), y: b.y },
-      ]);
-    }
-    const r = ripupAutoroute(W, H, pcb.nets, owners, staticBlocked);
-    setPcb({
-      ...pcb,
-      pcb_traces: r.traces.map((t) => ({ ...t, layer: 'Top' as const })),
-    });
+    setPcb(autorouteBoard(pcb));
   };
 
   const traces = pcb.pcb_traces ?? [];

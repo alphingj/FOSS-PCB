@@ -71,9 +71,13 @@ def _rot(dx, dy, rot):
 
 
 def _net_field(nid, net_names):
-    """KiCad requires a quoted name in every (net ...) field, including the
-    reserved unconnected net 0. Verified: '(net 0)' alone makes kicad-cli
-    refuse to load the board."""
+    """Pads carry `(net N "name")`; segments/zones/vias carry `(net N)` only.
+
+    Verified against kicad-cli 10.0.6: a segment written as `(net 1 "GND")`
+    makes KiCad refuse to load the board ("Expecting '')'"), while `(net 1)`
+    loads and reports the net correctly. The quoted name is resolved from the
+    board's `(net N "name")` table. `(net 0)` is likewise accepted (bare
+    `(net 0 "")` was rejected)."""
     name = "" if nid == 0 else _q(net_names[nid - 1]) if 0 < nid <= len(net_names) else ""
     return f'(net {nid} "{name}")'
 
@@ -206,7 +210,7 @@ def foss_to_kicad_pcb(foss: dict) -> str:
             lines.append(
                 f'  (segment (start {x1} {y1}) (end {x2} {y2})'
                 f' (width {t.get("width_mm", 0.25)}) (layer "{layer}")'
-                f' {_net_field(nid, [n.get("net_name", "") for n in nets])})'
+                f' (net {nid}))'
             )
     # Copper pour zones — KiCad computes the filled polygon on load; we emit
     # the zone boundary + pad connection rules. Verified with kicad-cli 10.0.6.

@@ -8,7 +8,7 @@ except ImportError:
 
 class Plugin(FossActionPlugin):
     name = "STEP Export"
-    description = "Export 3D STEP via PythonOCC/CadQuery when available"
+    description = "Export AP214 STEP through KiCad's OpenCASCADE exporter (kicad-cli)"
 
 
 def run(args: dict):

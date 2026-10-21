@@ -58,7 +58,7 @@ assert(s.includes('(layer "Edge.Cuts")'), 'board outline present on Edge.Cuts');
 // `polygon`/`connect_pads`/`min_thickness`/`fill`/`hatch` zone grammar.
 assert((s.match(/\(zone /g) ?? []).length === 2, '2 copper pour zones exported', (s.match(/\(zone /g) ?? []).length);
 assert(s.includes('(zone (net 2) (layer "F.Cu")') && s.includes('(zone (net 4) (layer "B.Cu")'), 'zone net+layer fields present');
-assert(s.includes('(polygon (pts (xy 19 14)') && s.includes('(polygon (pts (xy 1 1)'), 'zone polygon outlines present');
+assert(s.includes('(polygon (pts (xy 21 14)') && s.includes('(polygon (pts (xy 1 1)'), 'zone polygon outlines present');
 assert(s.includes('(connect_pads (clearance 0.2))'), 'zone thermal relief rules present');
 assert(s.includes('(fill yes (thermal_gap 0.508)'), 'zone fill rules present');
 // Vias: demo board has 2 through vias.

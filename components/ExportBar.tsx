@@ -37,8 +37,37 @@ export default function ExportBar() {
   };
 
   const doStep = async () => {
-    const r = isTauri() ? await Desktop.step(JSON.stringify(pcb)).catch((e: any) => `{"error":"${String(e.message).slice(0, 200)}"}`) : null;
-    download(`${name}.step.json`, typeof r === 'string' && r ? r : JSON.stringify({ note: 'Solid STEP needs desktop shell + CadQuery; this is a placeholder manifest.', components: pcb.components.length }));
+    if (!isTauri()) {
+      setError('STEP export runs in the desktop app: it needs KiCad 8+ (kicad-cli) as the CAD kernel. The web preview cannot export STEP.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const raw = await Desktop.step(JSON.stringify(pcb));
+      if (!raw) {
+        setError('STEP exporter returned no data.');
+        return;
+      }
+      let parsed: { error?: string; step?: string } | null = null;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        throw new Error('STEP exporter returned malformed JSON');
+      }
+      if (parsed?.error) {
+        setError(String(parsed.error));
+        return;
+      }
+      if (typeof parsed?.step !== 'string' || !parsed.step.startsWith('ISO-10303-21')) {
+        setError('STEP exporter returned data that is not a STEP file.');
+        return;
+      }
+      download(`${name}.step`, parsed.step, 'application/step');
+    } catch (e) {
+      setError(`STEP export failed: ${String((e as Error)?.message ?? e).slice(0, 300)}`);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const doImport = async (f: File) => {

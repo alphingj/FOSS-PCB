@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "out" / "partgen-verify"
-TS_OUT = Path(os.environ.get("KICAD_TS_OUT", Path(os.environ.get("TEMP", "/tmp")) / "kicadverify"))
+TS_OUT = Path(os.environ.get("KICAD_TS_OUT", Path(os.environ.get("TEMP", "/tmp")) / "kicadverify")).resolve()
 
 REQUIRE = "--require" in sys.argv
 

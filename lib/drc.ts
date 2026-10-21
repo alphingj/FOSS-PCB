@@ -13,21 +13,21 @@ const MAX_TRACE_VIOLATIONS = 10;
 
 type Seg = { a: Pt; b: Pt };
 
-type PadAt = { n: number; x: number; y: number; net: string };
+type PadAt = { n: number; x: number; y: number; net: string; w: number; h: number };
 
 /** Pad centres in board coordinates for footprints whose land pattern is
  *  sourced (SOIC-8, SOT-23, symmetric 2-pin). Returns null when the footprint
  *  has no modelled geometry, so callers fall back to a body-centre check. */
 function padCentres(c: FossPcb['components'][number]): PadAt[] | null {
-  const local: { n: number; dx: number; dy: number }[] = [];
+  const local: { n: number; dx: number; dy: number; w: number; h: number }[] = [];
   if (c.footprint.includes('SOIC-8')) {
-    for (const pad of soic8Pads()) local.push({ n: pad.n, dx: pad.dx, dy: pad.dy });
+    for (const pad of soic8Pads()) local.push({ ...pad });
   } else if (c.footprint.includes('SOT-23')) {
-    for (const pad of SOT23_PADS) local.push({ n: pad.n, dx: pad.dx, dy: pad.dy });
+    for (const pad of SOT23_PADS) local.push({ ...pad });
   } else {
     const g2 = twoPinGeom(c.footprint);
     if (!g2) return null;
-    local.push({ n: 1, dx: -g2.dx, dy: 0 }, { n: 2, dx: g2.dx, dy: 0 });
+    local.push({ n: 1, dx: -g2.dx, dy: 0, w: g2.w, h: g2.h }, { n: 2, dx: g2.dx, dy: 0, w: g2.w, h: g2.h });
   }
 
   const labels = Object.keys(c.pins);
@@ -53,14 +53,17 @@ function padCentres(c: FossPcb['components'][number]): PadAt[] | null {
   const { x, y, rotation } = c.pcb_placement_mm;
   return local.map((l) => {
     const [rx, ry] = rot2(l.dx, l.dy, rotation);
-    return { n: l.n, x: x + rx, y: y + ry, net: netOf(l.n) };
+    return { n: l.n, x: x + rx, y: y + ry, net: netOf(l.n), w: l.w, h: l.h };
   });
 }
 
-function traceSegs(pcb: FossPcb): { net: string; id: string; segs: Seg[] }[] {
+function traceSegs(pcb: FossPcb): { net: string; id: string; layer: 'Top' | 'Bottom'; width: number; segs: Seg[] }[] {
+  const isBottom = (l: string | undefined) => (l ?? 'Top').toLowerCase().startsWith('bottom');
   return (pcb.pcb_traces ?? []).map((t) => ({
     net: t.net,
     id: t.pts_mm.length ? t.pts_mm[0].join(',') : t.id,
+    layer: isBottom(t.layer) ? 'Bottom' : 'Top',
+    width: t.width_mm ?? 0.25,
     segs: t.pts_mm.slice(0, -1).map(([x1, y1], i) => {
       const [x2, y2] = t.pts_mm[i + 1];
       return { a: { x: x1, y: y1 }, b: { x: x2, y: y2 } };
@@ -94,19 +97,24 @@ function traceIssues(pcb: FossPcb): DrcIssue[] {
   for (let i = 0; i < segs.length && violations < MAX_TRACE_VIOLATIONS; i++) {
     for (let j = i + 1; j < segs.length && violations < MAX_TRACE_VIOLATIONS; j++) {
       if (segs[i].net === segs[j].net) continue;
+      // Copper on opposite sides cannot short; vias/pads are checked separately.
+      if (segs[i].layer !== segs[j].layer) continue;
       const need = Math.max(clearanceOf.get(segs[i].net) ?? DEFAULT_CLEARANCE_MM, clearanceOf.get(segs[j].net) ?? DEFAULT_CLEARANCE_MM);
+      const halfWidths = (segs[i].width + segs[j].width) / 2;
       let best = Infinity;
       for (const s1 of segs[i].segs) {
         for (const s2 of segs[j].segs) {
           const d = segSegDist(s1.a, s1.b, s2.a, s2.b);
           if (d < best) best = d;
-          if (best < need) break;
+          if (best - halfWidths < need) break;
         }
-        if (best < need) break;
+        if (best - halfWidths < need) break;
       }
-      if (best < need) {
+      // Distances are centreline-to-centreline; report the copper gap.
+      if (best - halfWidths < need) {
         violations += 1;
-        issues.push({ severity: 'error', message: `${segs[i].net} ↔ ${segs[j].net} clearance ${best.toFixed(2)}mm < ${need.toFixed(2)}mm` });
+        const gap = Math.max(0, best - halfWidths);
+        issues.push({ severity: 'error', message: `${segs[i].net} ↔ ${segs[j].net} clearance ${gap.toFixed(2)}mm < ${need.toFixed(2)}mm` });
       }
     }
   }
@@ -128,7 +136,7 @@ function traceIssues(pcb: FossPcb): DrcIssue[] {
       for (let i = 0; i + 1 < pts.length && violations < MAX_TRACE_VIOLATIONS; i++) {
         const a = { x: pts[i][0], y: pts[i][1] };
         const b = { x: pts[i + 1][0], y: pts[i + 1][1] };
-        if (segRectDist(a, b, rect) < need) {
+        if (segRectDist(a, b, rect) - (t.width_mm ?? 0.25) / 2 < need) {
           violations += 1;
           issues.push({ severity: 'error', message: `Trace ${t.id} (${t.net}) too close to ${c.designator} (< ${need.toFixed(2)}mm)` });
           break;
@@ -153,6 +161,13 @@ export function segRectDist(a: Pt, b: Pt, r: { x1: number; y1: number; x2: numbe
     if (dist < best) best = dist;
   }
   return best;
+}
+
+/** Distance point → axis-aligned rect (0 when inside). */
+export function ptRectDist(p: Pt, r: { x1: number; y1: number; x2: number; y2: number }): number {
+  const dx = Math.max(r.x1 - p.x, 0, p.x - r.x2);
+  const dy = Math.max(r.y1 - p.y, 0, p.y - r.y2);
+  return Math.hypot(dx, dy);
 }
 
 /** Pure code checks — never trust the LLM for these. */
@@ -217,26 +232,48 @@ export function runDrc(pcb: FossPcb): DrcIssue[] {
   const zones = pcb.pcb_layout_zones ?? [];
   const clearanceOf = new Map(pcb.nets.map((n) => [n.net_name, n.clearance_mm ?? DEFAULT_CLEARANCE_MM]));
   const allTraceSegs = traceSegs(pcb);
+  const isBottomLayer = (l: string | undefined) => (l ?? 'Top').toLowerCase().startsWith('bottom');
   for (const z of zones) {
     const { x1, y1, x2, y2 } = z.bounding_box_mm;
     const need = clearanceOf.get(z.net) ?? DEFAULT_CLEARANCE_MM;
+    const zBottom = isBottomLayer(z.layer);
     // Zone must be within board bounds.
     if (x1 < 0 || y1 < 0 || x2 > W || y2 > H)
       issues.push({ severity: 'error', message: `Zone "${z.net}" leaves board bounds (${x1},${y1})-(${x2},${y2})` });
-    // Zone clearance vs different-net traces: traces must not enter the zone
-    // bounding box shrunk by the clearance margin.
-    const padNeed = need; // pad-to-pour clearance (thermal reliefs handle pads)
+    // Zone clearance vs different-net traces ON THE SAME COPPER LAYER.
+    // Compare edge-to-edge: trace centreline distance minus half its width
+    // must still be at least the pour clearance.
     for (const s of allTraceSegs) {
       if (s.net === z.net) continue; // same-net copper connects freely
+      if ((s.layer === 'Bottom') !== zBottom) continue; // other side cannot short
       const sNeed = Math.max(need, clearanceOf.get(s.net) ?? DEFAULT_CLEARANCE_MM);
       for (const seg of s.segs) {
-        if (segRectDist(seg.a, seg.b, {
-          x1: x1 - sNeed, y1: y1 - sNeed, x2: x2 + sNeed, y2: y2 + sNeed
-        }) < sNeed) {
+        if (segRectDist(seg.a, seg.b, { x1, y1, x2, y2 }) - s.width / 2 < sNeed) {
           issues.push({ severity: 'error', message: `Zone "${z.net}" too close to trace "${s.net}" (< ${sNeed.toFixed(2)}mm)` });
           break;
         }
       }
+    }
+    // Foreign pads under the pour rectangle: a real fill would short them.
+    // Pads are treated as their circumscribed circle (conservative at corners).
+    for (const c of pcb.components) {
+      const cBottom = isBottomLayer(c.pcb_placement_mm.layer);
+      if (cBottom !== zBottom) continue;
+      const pads = padCentres(c);
+      if (!pads) continue;
+      for (const p of pads) {
+        if (!p.net || p.net === z.net) continue;
+        const pNeed = Math.max(need, clearanceOf.get(p.net) ?? DEFAULT_CLEARANCE_MM);
+        if (ptRectDist({ x: p.x, y: p.y }, { x1, y1, x2, y2 }) - Math.hypot(p.w, p.h) / 2 < pNeed)
+          issues.push({ severity: 'error', message: `Zone "${z.net}" too close to pad ${c.designator}.${p.n} (${p.net})` });
+      }
+    }
+    // Vias span every copper layer, so a foreign pour must clear them.
+    for (const v of pcb.pcb_vias ?? []) {
+      if (v.net === z.net) continue;
+      const vNeed = Math.max(need, clearanceOf.get(v.net) ?? DEFAULT_CLEARANCE_MM);
+      if (ptRectDist({ x: v.x, y: v.y }, { x1, y1, x2, y2 }) - (v.pad_mm ?? 0.6) / 2 < vNeed)
+        issues.push({ severity: 'error', message: `Zone "${z.net}" too close to via "${v.id}" (${v.net})` });
     }
     // Zone vs zone: different-net zones on the same layer must not overlap.
     const zLayer = z.layer.toLowerCase().startsWith('bottom') ? 'Bottom' : 'Top';
@@ -264,7 +301,7 @@ export function runDrc(pcb: FossPcb): DrcIssue[] {
       if (s.net === v.net) continue;
       const sNeed = Math.max(need, clearanceOf.get(s.net) ?? DEFAULT_CLEARANCE_MM);
       for (const seg of s.segs) {
-        if (ptSegDist({ x: v.x, y: v.y }, seg.a, seg.b) < vr + sNeed) {
+        if (ptSegDist({ x: v.x, y: v.y }, seg.a, seg.b) - s.width / 2 < vr + sNeed) {
           issues.push({ severity: 'error', message: `Via "${v.id}" (${v.net}) too close to trace "${s.net}" (< ${(vr + sNeed).toFixed(2)}mm)` });
           break;
         }

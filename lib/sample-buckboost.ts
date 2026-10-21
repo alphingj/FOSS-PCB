@@ -37,7 +37,10 @@ export const SAMPLE_BUCKBOOST: FossPcb = {
   schematic_wires: [],
   pcb_traces: [],
   pcb_layout_zones: [
-    { zone_name: 'SW_Copper_Polygon', net: 'SW', layer: 'Top', bounding_box_mm: { x1: 19, y1: 14, x2: 36, y2: 26 }, rule: 'Keep small and wide.' },
+    // Ends at x=34.5: D1's VOUT pad starts at 35.75, so a pour to x=36 would
+    // short the rect to the output net (the old demo value did exactly that).
+    // Starts at 21: R3's gate pad copper reaches 19.78, below the 19 edge.
+    { zone_name: 'SW_Copper_Polygon', net: 'SW', layer: 'Top', bounding_box_mm: { x1: 21, y1: 14, x2: 34.5, y2: 26 }, rule: 'Keep small and wide.' },
     { zone_name: 'Bottom_Ground_Plane', net: 'GND', layer: 'Bottom', bounding_box_mm: { x1: 1, y1: 1, x2: 49, y2: 34 }, rule: 'Continuous pour.' },
   ],
   pcb_vias: [
